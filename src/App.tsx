@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ArrowUpRight, Menu, X, MapPin, ArrowLeft, ArrowRight } from 'lucide-react'
+import LaunchHero from './LaunchHero'
 
 gsap.registerPlugin(ScrollTrigger)
 // keep helpers for typecheck (used in new hero via closure, not direct import)
@@ -658,43 +659,32 @@ function HeroSlider() {
 function NovaUnidade() {
   const { d, h, m, s, isPast } = useCountdown('2026-09-11T09:00:00-03:00')
   return (
-    <section id="nova-unidade" className="bg-[#080808] text-white border-t border-white/5">
-      <div className="max-w-[1280px] mx-auto px-6 md:px-10 py-16 md:py-20">
-        <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-10 items-start">
-          <div>
-            <div className="font-[Inter] text-[11px] tracking-[0.28em] text-white/40 flex items-center gap-2"><span className="w-6 h-px bg-[#D71920]" /> NOVA UNIDADE</div>
-            <h2 className="font-[Barlow_Condensed] font-black leading-[0.88] tracking-[-0.04em] mt-4" style={{ fontSize: 'clamp(3rem, 8vw, 6.8rem)' }}>
-              AUGUS<br /><span className="text-transparent" style={{ WebkitTextStroke: '1.3px #fff' }}>TINÓPOLIS</span>
-            </h2>
-            <div className="mt-5 font-[Barlow_Condensed] tracking-[0.14em] text-sm">
-              <span className="bg-[#D71920] text-white px-3 py-1.5">11.09.2026</span> <span className="border border-white/15 px-3 py-1.5 ml-2">09:00</span>
+    <section id="nova-unidade" className="bg-[#F7F5F0] text-[#0A0A0A] py-16 md:py-20 border-t border-black/5">
+      <div className="max-w-[1280px] mx-auto px-6 md:px-10">
+        <div className="font-[Inter] text-[11px] tracking-[0.28em] text-black/40 flex items-center gap-2"><span className="w-6 h-px bg-black/15" /> 11 DE SETEMBRO • 09:00</div>
+        <h2 className="font-[Barlow_Condensed] font-black leading-[0.88] tracking-[-0.04em] mt-3" style={{ fontSize: 'clamp(2.8rem,7vw,5.4rem)' }}>
+          UMA NOVA<br /><span className="text-[#B52A27]">BEST.</span><br />AGORA EM<br /><span className="text-transparent" style={{ WebkitTextStroke: '1.2px #0A0A0A' }}>AUGUSTINÓPOLIS</span>
+        </h2>
+        <p className="mt-4 font-[Inter] text-sm leading-[1.7] text-black/55 max-w-[42ch]">De Araguatins para Augustinópolis. A mesma curadoria que você já conhece, agora mais perto.</p>
+        <div className="mt-10 border-t border-black/10 pt-8">
+          {isPast ? (
+            <div>
+              <div className="font-[Barlow_Condensed] font-black leading-none tracking-[-0.04em]" style={{ fontSize: 'clamp(2.4rem,6vw,4rem)' }}>A BEST CHEGOU.</div>
+              <div className="font-[Inter] text-sm text-black/55 mt-2">Nossa nova unidade já está atendendo.</div>
             </div>
-            <p className="mt-6 font-[Inter] text-[14px] leading-[1.75] text-white/60 max-w-[44ch]">A BEST chega a Augustinópolis. Mesma curadoria, novas paredes. Duas cidades, uma só ideia.</p>
-            <a href="https://www.instagram.com/bestmultimarcasaugustinopolis/" target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 bg-white text-black font-[Barlow_Condensed] tracking-[0.14em] text-sm px-5 py-2.5 hover:bg-white/90 transition">VER NO INSTAGRAM <ArrowUpRight size={14} /></a>
-          </div>
-
-          <div>
-            {isPast ? (
-              <div className="bg-white text-black p-8 md:p-10 relative overflow-hidden">
-                <div className="font-[Inter] text-[11px] tracking-[0.22em] text-black/40">AGORA EM AUGUSTINÓPOLIS</div>
-                <div className="font-[Barlow_Condensed] font-black text-[2.6rem] leading-[0.9] mt-2">A BEST<br />CHEGOU.</div>
-                <p className="mt-3 text-sm leading-[1.6] text-black/60">Nossa nova unidade já está atendendo.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-4 gap-4 md:gap-8 max-w-[720px]">
+                {[[d, 'DIAS'], [h, 'HORAS'], [m, 'MIN'], [s, 'SEG']].map(([v, l]) => (
+                  <div key={l as string} className="text-center">
+                    <div className="font-[Barlow_Condensed] font-black leading-none tracking-[-0.03em]" style={{ fontSize: 'clamp(2.4rem,6vw,4.2rem)' }}>{String(v).padStart(2, '0')}</div>
+                    <div className="font-[Inter] text-[11px] tracking-[0.22em] text-black/40 mt-1">{l as string}</div>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <div className="border border-white/10 p-6 md:p-7">
-                <div className="font-[Inter] text-[11px] tracking-[0.22em] text-white/40">CONTAGEM PARA A INAUGURAÇÃO</div>
-                <div className="grid grid-cols-4 gap-2.5 mt-5">
-                  {[[d, 'DIAS'], [h, 'HORAS'], [m, 'MIN'], [s, 'SEG']].map(([v, l]) => (
-                    <div key={l as string} className="bg-white text-black text-center py-4">
-                      <div className="font-[Barlow_Condensed] font-black text-[1.9rem] leading-none">{String(v).padStart(2, '0')}</div>
-                      <div className="font-[Inter] text-[10px] tracking-[0.18em] text-black/40 mt-1">{l as string}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4 font-[Inter] text-[11px] tracking-[0.16em] text-white/35 flex justify-between"><span>11.09.2026 — 09:00</span><span>AUGUSTINÓPOLIS — TO</span></div>
-              </div>
-            )}
-          </div>
+              <div className="mt-4 font-[Inter] text-[11px] tracking-[0.16em] text-black/35">11.09.2026 — 09:00 • AUGUSTINÓPOLIS — TO • DE ARAGUATINS PARA AUGUSTINÓPOLIS</div>
+            </>
+          )}
         </div>
       </div>
     </section>
@@ -870,8 +860,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#080808]">
       <Header onNav={scrollTo} />
-      <HeroSlider />
+      <LaunchHero />
       <div data-reveal><NovaUnidade /></div>
+      <div data-reveal>
+        <div className="bg-[#F7F5F0] text-[#0A0A0A] py-6 text-center border-y border-black/5">
+          <div className="font-[Inter] text-[11px] tracking-[0.28em] text-black/40">BEST SELECTION — 5 PEÇAS EM MOVIMENTO</div>
+        </div>
+        <HeroSlider />
+      </div>
       <div data-reveal><Variedade /></div>
       <Marquee />
       <div data-reveal><Marcas /></div>
