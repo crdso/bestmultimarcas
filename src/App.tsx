@@ -237,6 +237,8 @@ function HeroSlider() {
   const stageRef = useRef<HTMLDivElement>(null)
   const prodARef = useRef<HTMLImageElement>(null)
   const prodBRef = useRef<HTMLImageElement>(null)
+  const prodAWrapRef = useRef<HTMLDivElement>(null)
+  const prodBWrapRef = useRef<HTMLDivElement>(null)
   const bgARef = useRef<HTMLDivElement>(null)
   const bgBRef = useRef<HTMLDivElement>(null)
   const glowARef = useRef<HTMLDivElement>(null)
@@ -275,16 +277,34 @@ function HeroSlider() {
     `
   }
 
-  // init layers + robust preload
+  function debugHero(label: string) {
+    if (!import.meta.env.DEV) return
+    console.table({
+      label,
+      current: currentRef.current,
+      idx,
+      active: activeIsA.current ? 'A' : 'B',
+      srcA: prodARef.current?.src.slice(-30),
+      srcB: prodBRef.current?.src.slice(-30),
+      opacityA: prodARef.current ? getComputedStyle(prodARef.current).opacity : '-',
+      opacityB: prodBRef.current ? getComputedStyle(prodBRef.current).opacity : '-',
+    })
+  }
+
+  // init layers + robust preload — GSAP/DOM is the sole owner, React does not reapply src/opacity/zIndex
   useEffect(() => {
     const a = prodARef.current, b = prodBRef.current
+    const aw = prodAWrapRef.current, bw = prodBWrapRef.current
     const bgA = bgARef.current, bgB = bgBRef.current
     const gA = glowARef.current, gB = glowBRef.current
     const wA = bgWordARef.current, wB = bgWordBRef.current
     const tA = textARef.current, tB = textBRef.current
-    if (!a || !b || !bgA || !bgB || !gA || !gB || !wA || !wB || !tA || !tB) return
+    if (!a || !b || !aw || !bw || !bgA || !bgB || !gA || !gB || !wA || !wB || !tA || !tB) return
     const s0 = SLIDES[0]
     const s1 = SLIDES[1]
+    // set DOM src once — React will not reapply them on idx changes
+    a.src = s0.asset; a.alt = s0.alt
+    b.src = s1.asset; b.alt = s1.alt
     // A = current
     bgA.style.background = s0.bg
     gA.style.background = s0.glow
@@ -302,19 +322,24 @@ function HeroSlider() {
     wB.style.webkitTextStroke = wordStrokeFor(s1) as string
     tB.style.color = fgFor(s1)
     renderTextLayer(tB, s1)
-    // explicit z-index
+    // explicit z-index — only set via DOM, never via React props after mount
     bgA.style.zIndex = '1'; bgB.style.zIndex = '0'
     gA.style.zIndex = '1'; gB.style.zIndex = '0'
     wA.style.zIndex = '2'; wB.style.zIndex = '1'
-    a.style.zIndex = '3'; b.style.zIndex = '2'
+    aw.style.zIndex = '3'; bw.style.zIndex = '2'
     tA.style.zIndex = '4'; tB.style.zIndex = '3'
-    bgB.style.opacity = '0'
-    gB.style.opacity = '0'
-    wB.style.opacity = '0'
-    tB.style.opacity = '0'
-    b.style.opacity = '0'
+    gsap.set(bgB, { opacity: 0 })
+    gsap.set(gB, { opacity: 0 })
+    gsap.set(wB, { opacity: 0 })
+    gsap.set(tB, { opacity: 0 })
+    gsap.set(b, { opacity: 0 })
+    gsap.set(aw, { opacity: 1 })
+    gsap.set(bw, { opacity: 1 })
+    // drop-shadow lives on wrapper, blur/transform on img
+    aw.style.filter = 'drop-shadow(0 28px 60px rgba(0,0,0,.28))'
+    bw.style.filter = 'drop-shadow(0 28px 60px rgba(0,0,0,.28))'
     gsap.set(a, { x: 0, y: 0, rotation: 0, scale: s0.scale, opacity: 1, filter: 'blur(0px)' })
-    gsap.set(b, { x: 0, y: 0, rotation: 0, scale: 1, opacity: 0 })
+    gsap.set(b, { x: 0, y: 0, rotation: 0, scale: 1, opacity: 0, filter: 'blur(0px)' })
 
     // preload strategy: slide 0 already eager, preload 1 immediately, then idle preload 2,3,4
     void preloadImage(s0.asset).catch(() => {})
@@ -404,17 +429,20 @@ function HeroSlider() {
       wordIn.style.webkitTextStroke = wordStrokeFor(nextSlide) as string
       textIn.style.color = fgFor(nextSlide)
       renderTextLayer(textIn, nextSlide)
-      // z-index swap
+      // z-index swap — wrappers hold product zIndex, not imgs
+      const wrapOut = activeIsA.current ? prodAWrapRef.current : prodBWrapRef.current
+      const wrapIn  = activeIsA.current ? prodBWrapRef.current : prodAWrapRef.current
       bgIn.style.zIndex = '2'; bgOut.style.zIndex = '1'
       glowIn.style.zIndex = '2'; glowOut.style.zIndex = '1'
       wordIn.style.zIndex = '3'; wordOut.style.zIndex = '2'
-      prodIn.style.zIndex = '5'; prodOut.style.zIndex = '4'
+      if (wrapOut && wrapIn) { wrapIn.style.zIndex = '5'; wrapOut.style.zIndex = '4' }
       textIn.style.zIndex = '6'; textOut.style.zIndex = '5'
       gsap.set([bgIn, glowIn, wordIn, textIn, prodIn], { opacity: 1 })
       gsap.set([bgOut, glowOut, wordOut, textOut, prodOut], { opacity: 0 })
       currentRef.current = next; setIdx(next)
       activeIsA.current = !activeIsA.current
       isTransitioning.current = false
+      if (import.meta.env.DEV) console.table({ label: 'reduced goTo end', current: currentRef.current, idx: next, active: activeIsA.current ? 'A' : 'B', srcA: prodARef.current?.src.slice(-30), srcB: prodBRef.current?.src.slice(-30) })
       if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; void goTo(p) }
       return
     }
@@ -437,11 +465,13 @@ function HeroSlider() {
     textIn.style.color = fgFor(nextSlide)
     renderTextLayer(textIn, nextSlide)
 
-    // z-index: incoming on top
+    // z-index: incoming on top — wrappers own product stacking
+    const wrapOut = activeIsA.current ? prodAWrapRef.current : prodBWrapRef.current
+    const wrapIn  = activeIsA.current ? prodBWrapRef.current : prodAWrapRef.current
     bgIn.style.zIndex = '2'; bgOut.style.zIndex = '1'
     glowIn.style.zIndex = '2'; glowOut.style.zIndex = '1'
     wordIn.style.zIndex = '3'; wordOut.style.zIndex = '2'
-    prodIn.style.zIndex = '5'; prodOut.style.zIndex = '4'
+    if (wrapOut && wrapIn) { wrapIn.style.zIndex = '5'; wrapOut.style.zIndex = '4' }
     textIn.style.zIndex = '6'; textOut.style.zIndex = '5'
 
     // ensure decode + complete before crossfade
@@ -493,6 +523,7 @@ function HeroSlider() {
         gsap.set(textIn, { opacity: 1, y: 0 })
         // normalize z-index (incoming becomes current A/B for next cycle)
         startIdle(prodIn)
+        debugHero(`after ${prev}→${next}`)
         if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; const d = p > next ? 1 : -1; void goTo(p, d) }
       }
     })
@@ -592,41 +623,45 @@ function HeroSlider() {
       onMouseEnter={() => { if (autoplayTimer.current) { clearInterval(autoplayTimer.current); autoplayTimer.current = null } }}
       onMouseLeave={() => scheduleAutoplay()}
     >
-      {/* bg layers */}
-      <div ref={bgARef} className="absolute inset-0" style={{ zIndex: 1 }} />
-      <div ref={bgBRef} className="absolute inset-0" style={{ zIndex: 0, opacity: 0 }} />
-      <div ref={glowARef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }} />
-      <div ref={glowBRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 0, opacity: 0 }} />
+      {/* bg layers — no reactive opacity/zIndex in JSX, GSAP owns them */}
+      <div ref={bgARef} className="absolute inset-0" />
+      <div ref={bgBRef} className="absolute inset-0" />
+      <div ref={glowARef} className="absolute inset-0 pointer-events-none" />
+      <div ref={glowBRef} className="absolute inset-0 pointer-events-none" />
       <div className="absolute inset-0 pointer-events-none opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(to right, #000 1px, transparent 1px), linear-gradient(to bottom, #000 1px, transparent 1px)', backgroundSize: '72px 72px', zIndex: 2 }} />
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 80% 70% at 50% 50%, transparent 42%, rgba(0,0,0,.06) 100%)', opacity: slide.textColor === 'dark' ? 0.6 : 0, zIndex: 2 }} />
 
-      {/* hairline — uses current fg, tweened via GSAP during transition */}
+      {/* hairline — uses current fg */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-[76px] z-20 pointer-events-none" style={{ background: `linear-gradient(to bottom, ${curFgMuted}, transparent)` }} />
 
-      {/* bg word layers — each has its own per-slide color */}
+      {/* bg word layers — GSAP owns opacity/zIndex/color */}
       <div
         ref={bgWordARef}
         aria-hidden
         className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 font-[Barlow_Condensed] font-black leading-none tracking-[-0.03em] whitespace-nowrap pointer-events-none will-change-transform"
-        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)', zIndex: 2 }}
+        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)' }}
       />
       <div
         ref={bgWordBRef}
         aria-hidden
         className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 font-[Barlow_Condensed] font-black leading-none tracking-[-0.03em] whitespace-nowrap pointer-events-none will-change-transform"
-        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)', zIndex: 1, opacity: 0 }}
+        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)' }}
       />
 
-      {/* products stack — explicit z-index */}
+      {/* products stack — wrappers own drop-shadow + zIndex, imgs are GSAP-only (no src/opacity/filter in JSX) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
-        <img ref={prodARef} src={SLIDES[0].asset} alt={SLIDES[0].alt} width={860} height={860} fetchPriority="high" decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw', filter: 'drop-shadow(0 28px 60px rgba(0,0,0,.28))', zIndex: 3 }} />
-        <img ref={prodBRef} src={SLIDES[1].asset} alt={SLIDES[1].alt} width={860} height={860} loading="lazy" decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw', filter: 'drop-shadow(0 28px 60px rgba(0,0,0,.28))', opacity: 0, zIndex: 2 }} />
+        <div ref={prodAWrapRef} className="absolute flex items-center justify-center pointer-events-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw' }}>
+          <img ref={prodARef} width={860} height={860} decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: '100%', height: '100%' }} />
+        </div>
+        <div ref={prodBWrapRef} className="absolute flex items-center justify-center pointer-events-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw' }}>
+          <img ref={prodBRef} width={860} height={860} decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: '100%', height: '100%' }} />
+        </div>
       </div>
 
-      {/* dual text layers — each already colored for its slide */}
+      {/* dual text layers — GSAP owns opacity/y/zIndex/color */}
       <div className="absolute z-20 left-6 md:left-10 lg:left-[6vw] bottom-[104px] md:bottom-[92px] max-w-[420px] pointer-events-none">
-        <div ref={textARef} className="absolute bottom-0 left-0 will-change-transform" style={{ zIndex: 4 }} />
-        <div ref={textBRef} className="absolute bottom-0 left-0 will-change-transform" style={{ zIndex: 3, opacity: 0 }} />
+        <div ref={textARef} className="absolute bottom-0 left-0 will-change-transform" />
+        <div ref={textBRef} className="absolute bottom-0 left-0 will-change-transform" />
         {/* spacer to keep container height */}
         <div aria-hidden className="invisible">
           <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, letterSpacing: '0.22em' }}>{slide.brand}</div>
