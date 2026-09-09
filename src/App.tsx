@@ -587,10 +587,9 @@ function Variedade() {
     <section id="variedade" className="bg-[#F7F5F0] text-[#0A0A0A] py-16 md:py-20">
       <div className="max-w-[1280px] mx-auto px-6 md:px-10">
         <div className="max-w-[720px]">
-          <div className="font-[Inter] text-[11px] tracking-[0.28em] text-black/40 flex items-center gap-2"><span className="w-6 h-px bg-black/15" /> VITRINE VISUAL</div>
-          <h2 className="font-[Barlow_Condensed] font-black leading-[0.9] tracking-[-0.04em] mt-3" style={{ fontSize: 'clamp(2.4rem, 6vw, 4.6rem)' }}>MUITO<br />ALÉM DISSO<span className="text-[#D71920]">.</span></h2>
-          <p className="mt-4 font-[Inter] text-[15px] leading-[1.7] text-black/55">Os 5 produtos do início são apenas uma amostra. A BEST reúne roupas, tênis, bonés, kits e novidades de diversas marcas — com reposição constante.</p>
-          <p className="mt-2 font-[Inter] text-[12px] tracking-[0.14em] text-black/35">AMOSTRA VISUAL • NÃO REPRESENTA TODO O CATÁLOGO</p>
+          <h2 className="font-[Barlow_Condensed] font-black leading-[0.9] tracking-[-0.04em]" style={{ fontSize: 'clamp(2.4rem, 6vw, 4.6rem)' }}>MUITO<br />ALÉM DISSO<span className="text-[#D71920]">.</span></h2>
+          <p className="mt-4 font-[Inter] text-[15px] leading-[1.7] text-black/55">Tênis, camisetas, jaquetas, kits, bermudas, bonés e novidades de diversas marcas.</p>
+          <p className="mt-2 font-[Inter] text-[13px] leading-[1.7] text-black/45">Novas peças chegando sempre.</p>
         </div>
 
         <div className="mt-10 border-t border-black/10 pt-8">
@@ -600,7 +599,7 @@ function Variedade() {
             ))}
           </div>
           <div className="mt-3 h-px bg-black/10" />
-          <div className="mt-3 font-[Inter] text-xs tracking-[0.16em] text-black/40">OVERSIZED • STREETWEAR • MODA • NOVIDADES • REPOSIÇÃO CONSTANTE</div>
+          <div className="mt-3 font-[Inter] text-xs tracking-[0.16em] text-black/40">NOVIDADES • VARIEDADE • ESTILO</div>
         </div>
       </div>
     </section>
