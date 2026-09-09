@@ -67,9 +67,9 @@ const SLIDES: Slide[] = [
     bgWord: 'NIKE',
     asset: '/products/nike-jacket.png',
     alt: 'Jaqueta Nike',
-    bg: '#0F0F0F',
-    glow: 'radial-gradient(ellipse 65% 55% at 50% 42%, rgba(255,255,255,.06) 0%, transparent 64%)',
-    vignette: 'radial-gradient(ellipse 75% 70% at 50% 50%, transparent 28%, rgba(0,0,0,.62) 100%)',
+    bg: 'radial-gradient(ellipse at 50% 45%, #343434 0%, #242424 38%, #1A1A1A 62%, #111111 100%)',
+    glow: 'radial-gradient(ellipse 55% 55% at 50% 45%, rgba(255,255,255,.12), transparent 65%)',
+    vignette: 'radial-gradient(ellipse 75% 70% at 50% 50%, transparent 32%, rgba(0,0,0,.42) 100%)',
     textColor: 'light',
     type: 'jacket',
     scale: 0.86,
@@ -200,6 +200,34 @@ function Header({ onNav }: { onNav: (id: string) => void }) {
   )
 }
 
+// ── PRELOAD CACHE ───────────────────────────────────────────────────────────
+
+const imageCache = new Map<string, Promise<void>>()
+
+function preloadImage(src: string): Promise<void> {
+  if (imageCache.has(src)) return imageCache.get(src)!
+  const p = new Promise<void>((resolve, reject) => {
+    const img = new Image()
+    img.src = src
+    if (img.complete && img.naturalWidth > 0) {
+      const d = (img as unknown as { decode?: () => Promise<void> }).decode
+      if (d) d.call(img).then(() => resolve()).catch(() => resolve())
+      else resolve()
+      return
+    }
+    img.onload = () => {
+      const d = (img as unknown as { decode?: () => Promise<void> }).decode
+      if (d) d.call(img).then(() => resolve()).catch(() => resolve())
+      else resolve()
+    }
+    img.onerror = () => reject(new Error(`preload failed: ${src}`))
+  })
+  imageCache.set(src, p)
+  // auto-evict on failure so retry can happen
+  p.catch(() => imageCache.delete(src))
+  return p
+}
+
 // ── HERO ────────────────────────────────────────────────────────────────────
 
 function HeroSlider() {
@@ -215,8 +243,9 @@ function HeroSlider() {
   const glowBRef = useRef<HTMLDivElement>(null)
   const bgWordARef = useRef<HTMLDivElement>(null)
   const bgWordBRef = useRef<HTMLDivElement>(null)
-  const brandRef = useRef<HTMLDivElement>(null)
-  const nameRef = useRef<HTMLHeadingElement>(null)
+  // dual text layers
+  const textARef = useRef<HTMLDivElement>(null)
+  const textBRef = useRef<HTMLDivElement>(null)
 
   const isTransitioning = useRef(false)
   const pending = useRef<number | null>(null)
@@ -227,29 +256,76 @@ function HeroSlider() {
   const resumeTimer = useRef<number | null>(null)
 
   const slide = SLIDES[idx]
-  const isDark = slide.textColor === 'dark'
 
   useEffect(() => {
     setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   }, [])
 
-  // init layers
+  function fgFor(s: Slide) { return s.textColor === 'dark' ? '#0A0A0A' : '#FFFFFF' }
+  function fgMutedFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(10,10,10,.55)' : 'rgba(255,255,255,.60)' }
+  function fgSubtleFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(10,10,10,.35)' : 'rgba(255,255,255,.45)' }
+  function wordColorFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(0,0,0,.045)' : 'rgba(255,255,255,.07)' }
+  function wordStrokeFor(s: Slide) { return s.textColor === 'dark' ? '1px rgba(0,0,0,.06)' : '1px rgba(255,255,255,.08)' }
+
+  function renderTextLayer(el: HTMLElement, s: Slide) {
+    el.innerHTML = `
+      <div style="font-family:Inter,sans-serif;font-size:11px;letter-spacing:0.22em;opacity:0.95">${s.brand}</div>
+      <h1 style="font-family:Barlow Condensed,sans-serif;font-weight:900;line-height:0.86;letter-spacing:-0.03em;font-size:clamp(2.8rem,7vw,5.6rem);margin-top:6px">${s.name}${s.name2 ? `<br/><span style="-webkit-text-stroke:${s.textColor === 'dark' ? '1.4px #0A0A0A' : '1.2px rgba(255,255,255,.92)'};color:transparent">${s.name2}</span>` : ''}</h1>
+      <div style="font-family:Inter,sans-serif;font-size:11px;letter-spacing:0.18em;margin-top:14px;opacity:0.85">ARAGUATINS — AUGUSTINÓPOLIS</div>
+    `
+  }
+
+  // init layers + robust preload
   useEffect(() => {
     const a = prodARef.current, b = prodBRef.current
     const bgA = bgARef.current, bgB = bgBRef.current
     const gA = glowARef.current, gB = glowBRef.current
     const wA = bgWordARef.current, wB = bgWordBRef.current
-    if (!a || !b || !bgA || !bgB || !gA || !gB || !wA || !wB) return
-    const s = SLIDES[0]
-    bgA.style.background = s.bg
-    gA.style.background = s.glow
-    wA.textContent = s.bgWord
+    const tA = textARef.current, tB = textBRef.current
+    if (!a || !b || !bgA || !bgB || !gA || !gB || !wA || !wB || !tA || !tB) return
+    const s0 = SLIDES[0]
+    const s1 = SLIDES[1]
+    // A = current
+    bgA.style.background = s0.bg
+    gA.style.background = s0.glow
+    wA.textContent = s0.bgWord
+    wA.style.color = wordColorFor(s0)
+    wA.style.webkitTextStroke = wordStrokeFor(s0) as string
+    tA.style.color = fgFor(s0)
+    renderTextLayer(tA, s0)
+    gsap.set(tA, { opacity: 1, y: 0 })
+    // B = hidden, will hold next
+    bgB.style.background = s1.bg
+    gB.style.background = s1.glow
+    wB.textContent = s1.bgWord
+    wB.style.color = wordColorFor(s1)
+    wB.style.webkitTextStroke = wordStrokeFor(s1) as string
+    tB.style.color = fgFor(s1)
+    renderTextLayer(tB, s1)
+    // explicit z-index
+    bgA.style.zIndex = '1'; bgB.style.zIndex = '0'
+    gA.style.zIndex = '1'; gB.style.zIndex = '0'
+    wA.style.zIndex = '2'; wB.style.zIndex = '1'
+    a.style.zIndex = '3'; b.style.zIndex = '2'
+    tA.style.zIndex = '4'; tB.style.zIndex = '3'
     bgB.style.opacity = '0'
     gB.style.opacity = '0'
     wB.style.opacity = '0'
+    tB.style.opacity = '0'
     b.style.opacity = '0'
-    gsap.set(a, { x: 0, y: 0, rotation: 0, scale: s.scale, opacity: 1, filter: 'blur(0px)' })
+    gsap.set(a, { x: 0, y: 0, rotation: 0, scale: s0.scale, opacity: 1, filter: 'blur(0px)' })
     gsap.set(b, { x: 0, y: 0, rotation: 0, scale: 1, opacity: 0 })
+
+    // preload strategy: slide 0 already eager, preload 1 immediately, then idle preload 2,3,4
+    void preloadImage(s0.asset).catch(() => {})
+    void preloadImage(s1.asset).catch(() => {})
+    const idlePreload = () => {
+      for (let i = 2; i < SLIDES.length; i++) void preloadImage(SLIDES[i].asset).catch(() => {})
+    }
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    if (ric) ric(idlePreload)
+    else setTimeout(idlePreload, 700)
+
     startIdle(a)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -261,7 +337,6 @@ function HeroSlider() {
   function startIdle(el: HTMLElement) {
     killIdle()
     if (reduced) return
-    // per-type idle subtle differences
     const s = SLIDES[currentRef.current]
     const ampY = s.type === 'shoe' ? 7 : s.type === 'jacket' ? 5 : s.type === 'shirt' ? 6 : 4
     const ampR = s.type === 'shoe' ? 1.8 : s.type === 'jacket' ? 0.9 : 1.1
@@ -276,7 +351,7 @@ function HeroSlider() {
     if (reduced) return
     if (autoplayTimer.current) clearInterval(autoplayTimer.current)
     autoplayTimer.current = window.setInterval(() => {
-      goTo((currentRef.current + 1) % SLIDES.length, 1)
+      void goTo((currentRef.current + 1) % SLIDES.length, 1)
     }, 6500)
   }, [reduced])
 
@@ -286,7 +361,7 @@ function HeroSlider() {
     resumeTimer.current = window.setTimeout(() => scheduleAutoplay(), 9000)
   }, [scheduleAutoplay])
 
-  const goTo = useCallback((next: number, dir?: number) => {
+  const goTo = useCallback(async (next: number, dir?: number) => {
     if (next === currentRef.current) return
     if (isTransitioning.current) { pending.current = next; return }
     isTransitioning.current = true
@@ -305,21 +380,42 @@ function HeroSlider() {
     const glowIn  = activeIsA.current ? glowBRef.current : glowARef.current
     const wordOut = activeIsA.current ? bgWordARef.current : bgWordBRef.current
     const wordIn  = activeIsA.current ? bgWordBRef.current : bgWordARef.current
-    const brandEl = brandRef.current
-    const nameEl  = nameRef.current
+    const textOut = activeIsA.current ? textARef.current : textBRef.current
+    const textIn  = activeIsA.current ? textBRef.current : textARef.current
 
-    if (!prodOut || !prodIn || !bgOut || !bgIn || !glowOut || !glowIn || !wordOut || !wordIn || !brandEl || !nameEl) {
+    if (!prodOut || !prodIn || !bgOut || !bgIn || !glowOut || !glowIn || !wordOut || !wordIn || !textOut || !textIn) {
       currentRef.current = next; setIdx(next); isTransitioning.current = false; return
+    }
+
+    // ——— guarantee incoming ready before any visual change ———
+    try {
+      await preloadImage(nextSlide.asset)
+    } catch (e) {
+      console.warn('[hero] preload failed, aborting transition', nextSlide.asset, e)
+      isTransitioning.current = false
+      return
     }
 
     if (reduced) {
       bgIn.style.background = nextSlide.bg
       glowIn.style.background = nextSlide.glow
       wordIn.textContent = nextSlide.bgWord
+      wordIn.style.color = wordColorFor(nextSlide)
+      wordIn.style.webkitTextStroke = wordStrokeFor(nextSlide) as string
+      textIn.style.color = fgFor(nextSlide)
+      renderTextLayer(textIn, nextSlide)
+      // z-index swap
+      bgIn.style.zIndex = '2'; bgOut.style.zIndex = '1'
+      glowIn.style.zIndex = '2'; glowOut.style.zIndex = '1'
+      wordIn.style.zIndex = '3'; wordOut.style.zIndex = '2'
+      prodIn.style.zIndex = '5'; prodOut.style.zIndex = '4'
+      textIn.style.zIndex = '6'; textOut.style.zIndex = '5'
+      gsap.set([bgIn, glowIn, wordIn, textIn, prodIn], { opacity: 1 })
+      gsap.set([bgOut, glowOut, wordOut, textOut, prodOut], { opacity: 0 })
       currentRef.current = next; setIdx(next)
       activeIsA.current = !activeIsA.current
       isTransitioning.current = false
-      if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; goTo(p) }
+      if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; void goTo(p) }
       return
     }
 
@@ -330,20 +426,51 @@ function HeroSlider() {
     const TRAVEL = vw * 0.62
     const DUR = 1.72
 
-    // prepare incoming
+    // prepare incoming layers fully before animating
     prodIn.src = nextSlide.asset
     prodIn.alt = nextSlide.alt
     bgIn.style.background = nextSlide.bg
     glowIn.style.background = nextSlide.glow
     wordIn.textContent = nextSlide.bgWord
+    wordIn.style.color = wordColorFor(nextSlide)
+    wordIn.style.webkitTextStroke = wordStrokeFor(nextSlide) as string
+    textIn.style.color = fgFor(nextSlide)
+    renderTextLayer(textIn, nextSlide)
 
-    gsap.killTweensOf([prodOut, prodIn, bgOut, bgIn, glowOut, glowIn, wordOut, wordIn, brandEl, nameEl])
+    // z-index: incoming on top
+    bgIn.style.zIndex = '2'; bgOut.style.zIndex = '1'
+    glowIn.style.zIndex = '2'; glowOut.style.zIndex = '1'
+    wordIn.style.zIndex = '3'; wordOut.style.zIndex = '2'
+    prodIn.style.zIndex = '5'; prodOut.style.zIndex = '4'
+    textIn.style.zIndex = '6'; textOut.style.zIndex = '5'
+
+    // ensure decode + complete before crossfade
+    try {
+      if (!prodIn.complete || prodIn.naturalWidth === 0) {
+        await new Promise<void>((res, rej) => {
+          const onLoad = () => { prodIn.removeEventListener('load', onLoad); prodIn.removeEventListener('error', onErr); res() }
+          const onErr = () => { prodIn.removeEventListener('load', onLoad); prodIn.removeEventListener('error', onErr); rej(new Error('img load error')) }
+          prodIn.addEventListener('load', onLoad, { once: true })
+          prodIn.addEventListener('error', onErr, { once: true })
+        })
+      }
+      const d = (prodIn as unknown as { decode?: () => Promise<void> }).decode
+      if (d) await d.call(prodIn).catch(() => {})
+      if (prodIn.naturalWidth === 0) throw new Error('naturalWidth 0')
+    } catch (e) {
+      console.warn('[hero] incoming decode failed, aborting', e)
+      isTransitioning.current = false
+      return
+    }
+
+    gsap.killTweensOf([prodOut, prodIn, bgOut, bgIn, glowOut, glowIn, wordOut, wordIn, textOut, textIn])
 
     gsap.set(prodIn,  { x: direction * TRAVEL, y: direction * 16, rotation: -direction * rotIn, scale: nextSlide.scale * 1.06, opacity: 0, filter: 'blur(12px)' })
     gsap.set(prodOut, { x: 0, y: 0, rotation: 0, scale: prevSlide.scale, opacity: 1, filter: 'blur(0px)' })
     gsap.set(bgIn,   { opacity: 0 })
     gsap.set(glowIn, { opacity: 0 })
     gsap.set(wordIn, { x: direction * 70, opacity: 0, scale: 0.96 })
+    gsap.set(textIn, { y: 18, opacity: 0 })
 
     const tl = gsap.timeline({
       onComplete: () => {
@@ -351,18 +478,22 @@ function HeroSlider() {
         setIdx(next)
         activeIsA.current = !activeIsA.current
         isTransitioning.current = false
-        // reset outgoing to hidden for next use
-        gsap.set(prodOut, { opacity: 0, filter: 'blur(0px)' })
+        // explicit normalize
+        gsap.set(prodOut, { x: 0, y: 0, rotation: 0, scale: prevSlide.scale, opacity: 0, filter: 'blur(0px)', clearProps: 'transform' })
+        gsap.set(prodIn,  { x: 0, y: 0, rotation: 0, rotationY: 0, rotationX: 0, scale: nextSlide.scale, opacity: 1, filter: 'blur(0px)', clearProps: 'transform' })
+        // re-apply scale after clear
+        gsap.set(prodIn, { scale: nextSlide.scale })
         gsap.set(bgOut, { opacity: 0 })
         gsap.set(glowOut, { opacity: 0 })
-        gsap.set(wordOut, { opacity: 0 })
-        // ensure visible layers are at 1
+        gsap.set(wordOut, { opacity: 0, x: 0, scale: 1 })
+        gsap.set(textOut, { opacity: 0, y: 0 })
         gsap.set(bgIn, { opacity: 1 })
         gsap.set(glowIn, { opacity: 1 })
         gsap.set(wordIn, { opacity: 1, x: 0, scale: 1 })
-        gsap.set(prodIn, { x: 0, y: 0, rotation: 0, scale: nextSlide.scale, opacity: 1, filter: 'blur(0px)' })
+        gsap.set(textIn, { opacity: 1, y: 0 })
+        // normalize z-index (incoming becomes current A/B for next cycle)
         startIdle(prodIn)
-        if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; const d = p > next ? 1 : -1; goTo(p, d) }
+        if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; const d = p > next ? 1 : -1; void goTo(p, d) }
       }
     })
 
@@ -370,7 +501,7 @@ function HeroSlider() {
     tl.to(prodOut, { x: -direction * TRAVEL, y: direction * -18, rotation: direction * rotOut, scale: prevSlide.scale * 0.88, opacity: 0, filter: 'blur(9px)', duration: DUR, ease: 'power4.inOut' }, 0)
     tl.to(prodIn,  { x: 0, y: 0, rotation: 0, scale: nextSlide.scale, opacity: 1, filter: 'blur(0px)', duration: DUR, ease: 'power4.inOut' }, 0)
 
-    // BG crossfade
+    // BG crossfade — only after incoming is guaranteed ready (above)
     tl.to(bgIn,   { opacity: 1, duration: DUR, ease: 'power2.inOut' }, 0)
     tl.to(glowIn, { opacity: 1, duration: DUR * 0.85, ease: 'power2.out' }, 0.08)
     tl.to(bgOut,  { opacity: 0, duration: DUR * 0.6, ease: 'power2.in' }, 0)
@@ -380,17 +511,9 @@ function HeroSlider() {
     tl.to(wordOut, { x: -direction * 90, opacity: 0, scale: 0.92, duration: DUR * 0.55, ease: 'power3.in' }, 0.04)
     tl.to(wordIn,  { x: 0, opacity: 1, scale: 1, duration: DUR * 0.72, ease: 'power3.out' }, DUR * 0.28)
 
-    // text stagger (brand + name)
-    tl.to(brandEl, { y: -10, opacity: 0, duration: 0.26, ease: 'power2.in' }, 0.10)
-    tl.to(nameEl,  { y: -18, opacity: 0, duration: 0.30, ease: 'power2.in' }, 0.14)
-    tl.call(() => {
-      brandEl.textContent = nextSlide.brand
-      // name with optional second word on new line
-      nameEl.innerHTML = nextSlide.name2 ? `${nextSlide.name}<br/><span class="stroke">${nextSlide.name2}</span>` : nextSlide.name
-      gsap.set([brandEl, nameEl], { y: 14 })
-    }, [], DUR * 0.42)
-    tl.to(brandEl, { y: 0, opacity: 1, duration: 0.40, ease: 'power3.out' }, DUR * 0.44)
-    tl.to(nameEl,  { y: 0, opacity: 1, duration: 0.48, ease: 'power3.out' }, DUR * 0.46)
+    // dual text crossfade (no reliance on isDark global)
+    tl.to(textOut, { y: -18, opacity: 0, duration: 0.32, ease: 'power2.in' }, 0.12)
+    tl.to(textIn,  { y: 0, opacity: 1, duration: 0.48, ease: 'power3.out' }, DUR * 0.38)
 
   }, [reduced, pauseAutoplay])
 
@@ -427,8 +550,8 @@ function HeroSlider() {
   // keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') { e.preventDefault(); pauseAutoplay(); goTo((currentRef.current + 1) % SLIDES.length, 1) }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); pauseAutoplay(); goTo((currentRef.current - 1 + SLIDES.length) % SLIDES.length, -1) }
+      if (e.key === 'ArrowRight') { e.preventDefault(); pauseAutoplay(); void goTo((currentRef.current + 1) % SLIDES.length, 1) }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); pauseAutoplay(); void goTo((currentRef.current - 1 + SLIDES.length) % SLIDES.length, -1) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -444,7 +567,7 @@ function HeroSlider() {
       const dx = e.changedTouches[0].clientX - sx
       if (Math.abs(dx) > 44) {
         pauseAutoplay()
-        goTo(dx < 0 ? (currentRef.current + 1) % SLIDES.length : (currentRef.current - 1 + SLIDES.length) % SLIDES.length, dx < 0 ? 1 : -1)
+        void goTo(dx < 0 ? (currentRef.current + 1) % SLIDES.length : (currentRef.current - 1 + SLIDES.length) % SLIDES.length, dx < 0 ? 1 : -1)
       }
     }
     el.addEventListener('touchstart', onStart, { passive: true })
@@ -454,6 +577,10 @@ function HeroSlider() {
 
   const nextIdx = (idx + 1) % SLIDES.length
   const prevIdx = (idx - 1 + SLIDES.length) % SLIDES.length
+
+  // helper for non-text UI to get current fg synchronously (initial render)
+  const curFg = fgFor(slide)
+  const curFgMuted = fgMutedFor(slide)
 
   return (
     <section
@@ -466,64 +593,66 @@ function HeroSlider() {
       onMouseLeave={() => scheduleAutoplay()}
     >
       {/* bg layers */}
-      <div ref={bgARef} className="absolute inset-0" />
-      <div ref={bgBRef} className="absolute inset-0" />
-      <div ref={glowARef} className="absolute inset-0 pointer-events-none" />
-      <div ref={glowBRef} className="absolute inset-0 pointer-events-none" />
-      <div className="absolute inset-0 pointer-events-none opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(to right, #000 1px, transparent 1px), linear-gradient(to bottom, #000 1px, transparent 1px)', backgroundSize: '72px 72px' }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 80% 70% at 50% 50%, transparent 42%, rgba(0,0,0,.06) 100%)', opacity: isDark ? 0.6 : 0 }} />
+      <div ref={bgARef} className="absolute inset-0" style={{ zIndex: 1 }} />
+      <div ref={bgBRef} className="absolute inset-0" style={{ zIndex: 0, opacity: 0 }} />
+      <div ref={glowARef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }} />
+      <div ref={glowBRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 0, opacity: 0 }} />
+      <div className="absolute inset-0 pointer-events-none opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(to right, #000 1px, transparent 1px), linear-gradient(to bottom, #000 1px, transparent 1px)', backgroundSize: '72px 72px', zIndex: 2 }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 80% 70% at 50% 50%, transparent 42%, rgba(0,0,0,.06) 100%)', opacity: slide.textColor === 'dark' ? 0.6 : 0, zIndex: 2 }} />
 
-      {/* hairline */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-[76px] z-20 pointer-events-none" style={{ background: isDark ? 'linear-gradient(to bottom, rgba(0,0,0,.35), transparent)' : 'linear-gradient(to bottom, rgba(255,255,255,.45), transparent)' }} />
+      {/* hairline — uses current fg, tweened via GSAP during transition */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-[76px] z-20 pointer-events-none" style={{ background: `linear-gradient(to bottom, ${curFgMuted}, transparent)` }} />
 
-      {/* bg word layers */}
+      {/* bg word layers — each has its own per-slide color */}
       <div
         ref={bgWordARef}
         aria-hidden
         className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 font-[Barlow_Condensed] font-black leading-none tracking-[-0.03em] whitespace-nowrap pointer-events-none will-change-transform"
-        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)', color: isDark ? 'rgba(0,0,0,.045)' : 'rgba(255,255,255,.07)', WebkitTextStroke: isDark ? '1px rgba(0,0,0,.06)' : '1px rgba(255,255,255,.08)' }}
+        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)', zIndex: 2 }}
       />
       <div
         ref={bgWordBRef}
         aria-hidden
         className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 font-[Barlow_Condensed] font-black leading-none tracking-[-0.03em] whitespace-nowrap pointer-events-none will-change-transform"
-        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)', color: isDark ? 'rgba(0,0,0,.045)' : 'rgba(255,255,255,.07)', WebkitTextStroke: isDark ? '1px rgba(0,0,0,.06)' : '1px rgba(255,255,255,.08)', opacity: 0 }}
+        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)', zIndex: 1, opacity: 0 }}
       />
 
-      {/* products stack */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-        <img ref={prodARef} src={SLIDES[0].asset} alt={SLIDES[0].alt} width={860} height={860} fetchPriority="high" decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw', filter: 'drop-shadow(0 28px 60px rgba(0,0,0,.28))' }} />
-        <img ref={prodBRef} src={SLIDES[1].asset} alt={SLIDES[1].alt} width={860} height={860} loading="lazy" decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw', filter: 'drop-shadow(0 28px 60px rgba(0,0,0,.28))', opacity: 0 }} />
+      {/* products stack — explicit z-index */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
+        <img ref={prodARef} src={SLIDES[0].asset} alt={SLIDES[0].alt} width={860} height={860} fetchPriority="high" decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw', filter: 'drop-shadow(0 28px 60px rgba(0,0,0,.28))', zIndex: 3 }} />
+        <img ref={prodBRef} src={SLIDES[1].asset} alt={SLIDES[1].alt} width={860} height={860} loading="lazy" decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw', filter: 'drop-shadow(0 28px 60px rgba(0,0,0,.28))', opacity: 0, zIndex: 2 }} />
       </div>
 
-      {/* text — minimal */}
-      <div className="absolute z-20 left-6 md:left-10 lg:left-[6vw] bottom-[104px] md:bottom-[92px] max-w-[420px]">
-        <div ref={brandRef} className={`font-[Inter] text-[11px] tracking-[0.22em] mb-2 will-change-transform ${isDark ? 'text-black/55' : 'text-white/60'}`}>{slide.brand}</div>
-        <h1 ref={nameRef} className={`font-[Barlow_Condensed] font-black leading-[0.86] tracking-[-0.03em] will-change-transform ${isDark ? 'text-[#0A0A0A]' : 'text-white'}`} style={{ fontSize: 'clamp(2.8rem, 7vw, 5.6rem)', textShadow: isDark ? 'none' : '0 2px 40px rgba(0,0,0,.32)' }}>
-          {slide.name}
-          {slide.name2 ? <><br /><span className="stroke" style={{ WebkitTextStroke: isDark ? '1.4px #0A0A0A' : '1.2px rgba(255,255,255,.92)', color: 'transparent' }}>{slide.name2}</span></> : null}
-        </h1>
-        <div className={`mt-4 font-[Inter] text-[11px] tracking-[0.18em] ${isDark ? 'text-black/35' : 'text-white/45'}`}>ARAGUATINS — AUGUSTINÓPOLIS</div>
+      {/* dual text layers — each already colored for its slide */}
+      <div className="absolute z-20 left-6 md:left-10 lg:left-[6vw] bottom-[104px] md:bottom-[92px] max-w-[420px] pointer-events-none">
+        <div ref={textARef} className="absolute bottom-0 left-0 will-change-transform" style={{ zIndex: 4 }} />
+        <div ref={textBRef} className="absolute bottom-0 left-0 will-change-transform" style={{ zIndex: 3, opacity: 0 }} />
+        {/* spacer to keep container height */}
+        <div aria-hidden className="invisible">
+          <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, letterSpacing: '0.22em' }}>{slide.brand}</div>
+          <h1 style={{ fontFamily: 'Barlow Condensed,sans-serif', fontWeight: 900, lineHeight: 0.86, fontSize: 'clamp(2.8rem,7vw,5.6rem)' }}>{slide.name}{slide.name2 ? <><br />{slide.name2}</> : null}</h1>
+          <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, marginTop: 14 }}>ARAGUATINS — AUGUSTINÓPOLIS</div>
+        </div>
       </div>
 
       {/* right controls — minimal */}
       <div className="absolute z-20 right-6 md:right-10 bottom-[20px] md:bottom-[32px] flex flex-col items-end gap-3">
-        <span className={`font-[Barlow_Condensed] text-[11px] tracking-[0.28em] ${isDark ? 'text-black/55' : 'text-white/60'}`}>{String(idx + 1).padStart(2, '0')} / 05</span>
+        <span className="font-[Barlow_Condensed] text-[11px] tracking-[0.28em]" style={{ color: curFgMuted }}>{String(idx + 1).padStart(2, '0')} / 05</span>
         <div className="flex items-center gap-2">
-          <button aria-label="Anterior" onClick={() => { pauseAutoplay(); goTo(prevIdx, -1) }} className={`w-10 h-10 rounded-full border flex items-center justify-center transition ${isDark ? 'border-black/15 text-black hover:bg-black hover:text-white' : 'border-white/25 text-white hover:bg-white hover:text-black'} bg-transparent backdrop-blur-md`}>
+          <button aria-label="Anterior" onClick={() => { pauseAutoplay(); void goTo(prevIdx, -1) }} className="w-10 h-10 rounded-full border flex items-center justify-center transition bg-transparent backdrop-blur-md" style={{ borderColor: curFgMuted, color: curFg }}>
             <ArrowLeft size={16} strokeWidth={1.6} />
           </button>
-          <button aria-label="Próximo" onClick={() => { pauseAutoplay(); goTo(nextIdx, 1) }} className={`w-10 h-10 rounded-full border flex items-center justify-center transition ${isDark ? 'bg-black text-white border-black hover:bg-black/90' : 'bg-white text-black border-white hover:bg-white/90'}`}>
+          <button aria-label="Próximo" onClick={() => { pauseAutoplay(); void goTo(nextIdx, 1) }} className="w-10 h-10 rounded-full border flex items-center justify-center transition" style={{ background: curFg, color: slide.textColor === 'dark' ? '#fff' : '#000', borderColor: curFg }}>
             <ArrowRight size={16} strokeWidth={1.6} />
           </button>
         </div>
-        <a href="https://www.instagram.com/bestmultimarcasaraguatins/" target="_blank" rel="noreferrer" className={`hidden md:inline-flex items-center gap-1.5 font-[Inter] text-[11px] tracking-[0.16em] underline-offset-4 hover:underline ${isDark ? 'text-black/45' : 'text-white/55'}`}>VER NO INSTAGRAM <ArrowUpRight size={12} /></a>
+        <a href="https://www.instagram.com/bestmultimarcasaraguatins/" target="_blank" rel="noreferrer" className="hidden md:inline-flex items-center gap-1.5 font-[Inter] text-[11px] tracking-[0.16em] underline-offset-4 hover:underline" style={{ color: fgSubtleFor(slide) }}>VER NO INSTAGRAM <ArrowUpRight size={12} /></a>
       </div>
 
-      {/* dots — discrete */}
+      {/* dots — discrete, color driven by current fg but tweened in timeline via inline update after transition */}
       <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-[26px] md:bottom-[36px] flex gap-1.5">
         {SLIDES.map((_, i) => (
-          <button key={i} aria-label={`Ir para ${i + 1}`} onClick={() => { pauseAutoplay(); goTo(i, i > idx ? 1 : -1) }} className="h-[2px] rounded-full transition-all duration-500" style={{ width: i === idx ? 28 : 14, background: i === idx ? (isDark ? '#0A0A0A' : '#fff') : (isDark ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.32)') }} />
+          <button key={i} aria-label={`Ir para ${i + 1}`} onClick={() => { pauseAutoplay(); void goTo(i, i > idx ? 1 : -1) }} className="h-[2px] rounded-full transition-all duration-500" style={{ width: i === idx ? 28 : 14, background: i === idx ? curFg : curFgMuted, opacity: i === idx ? 1 : 0.55 }} />
         ))}
       </div>
 
