@@ -1,150 +1,203 @@
 import { useEffect, useRef } from 'react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import './LaunchHero.css'
 
-gsap.registerPlugin(ScrollTrigger)
+const CHAPTERS: Array<[number, number, number, number]> = [
+  [0, 0.06, 0.38, 0.48],
+  [0.52, 0.60, 0.90, 1],
+]
+
+function smooth(v: number, a = 0, b = 1) { return Math.min(b, Math.max(a, v)) }
+function ease(v: number) { const s = smooth(v); return s * s * (3 - 2 * s) }
+function opacityFor(p: number, [a, b, c, d]: [number, number, number, number]) {
+  if (p < a || p > d) return 0
+  const f = b > a ? ease((p - a) / (b - a)) : 1
+  const g = d > c ? 1 - ease((p - c) / (d - c)) : 1
+  return Math.min(f, g)
+}
 
 export default function LaunchHero() {
-  const wrapRef = useRef<HTMLDivElement>(null)
-  const stickyRef = useRef<HTMLDivElement>(null)
-  const trackRef = useRef<HTMLDivElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const copyRef = useRef<HTMLDivElement>(null)
+  const veilRef = useRef<HTMLDivElement>(null)
+  const railRef = useRef<HTMLDivElement>(null)
+  const cueRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const wrap = wrapRef.current
-    const sticky = stickyRef.current
-    const track = trackRef.current
-    if (!wrap || !sticky || !track) return
+    const section = sectionRef.current
+    const stage = stageRef.current
+    if (!section || !stage) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      section.dataset.mode = 'static'
+      return
+    }
 
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const chapters = Array.from(copyRef.current?.querySelectorAll<HTMLElement>('.launch-chapter') ?? [])
+    const products = Array.from(stage.querySelectorAll<HTMLElement>('.launch-prod'))
+    const isMobile = window.matchMedia('(max-width: 767px)').matches
 
-    // ambient product loop — master timeline 12s, independent of scroll
-    const products = Array.from(track.querySelectorAll<HTMLElement>('.launch-prod'))
-    if (!prefersReduced) {
-      const tl = gsap.timeline({ repeat: -1, repeatDelay: 0.5 })
-      // Dunk — diagonal cross behind text
-      tl.to(products[0], { x: '18vw', y: '-8vh', rotation: 6, scale: 1.08, duration: 3.2, ease: 'sine.inOut' }, 0)
-        .to(products[0], { x: '-6vw', y: '6vh', rotation: -4, scale: 1, duration: 3.4, ease: 'sine.inOut' }, 3.2)
-        .to(products[0], { x: 0, y: 0, rotation: 0, scale: 1, duration: 2.8, ease: 'sine.inOut' }, 6.6)
-      // Adidas — float distant
-      tl.to(products[1], { x: '-10vw', y: '4vh', rotation: -5, scale: 0.92, duration: 2.9, ease: 'sine.inOut' }, 0.4)
-        .to(products[1], { x: '8vw', y: '-5vh', rotation: 4, scale: 0.88, duration: 3.1, ease: 'sine.inOut' }, 3.3)
-      // Jacket — slow rise
-      tl.to(products[2], { y: '-10vh', rotation: 2, scale: 0.96, duration: 3.6, ease: 'sine.inOut' }, 0.8)
-        .to(products[2], { y: '4vh', rotation: -2, scale: 0.9, duration: 3.2, ease: 'sine.inOut' }, 4.4)
-      // Diesel — cross behind
-      tl.to(products[3], { x: '12vw', y: '6vh', rotation: 3, duration: 3, ease: 'sine.inOut' }, 1.0)
-        .to(products[3], { x: '-8vw', y: '-4vh', rotation: -3, duration: 3.2, ease: 'sine.inOut' }, 4.0)
-      // Cap — close, subtle
-      tl.to(products[4], { x: '6vw', y: '-6vh', rotation: -6, scale: 1.12, duration: 2.8, ease: 'sine.inOut' }, 0.6)
-        .to(products[4], { x: -4, y: 4, rotation: 4, scale: 1, duration: 3, ease: 'sine.inOut' }, 3.4)
+    let z = 0, G = 0, raf = 0, raf2 = 0, last = 0
 
-      // glow breathing
-      const glows = track.querySelectorAll<HTMLElement>('.launch-glow')
-      glows.forEach((g, i) => {
-        gsap.to(g, { scale: 1.06, duration: 8 + i * 1.2, ease: 'sine.inOut', repeat: -1, yoyo: true, delay: i * 0.7 })
+    function render(p: number) {
+      section!.style.setProperty('--launch-progress', p.toFixed(4))
+      const v = p > 0.88 ? ease((p - 0.88) / 0.12) : 0
+      if (veilRef.current) veilRef.current.style.opacity = v.toFixed(3)
+      if (railRef.current) railRef.current.style.setProperty('--p', p.toFixed(4))
+      chapters.forEach((el, i) => {
+        const o = opacityFor(p, CHAPTERS[i] ?? [0, 0, 1, 1])
+        el.style.opacity = o.toFixed(3)
+        el.style.transform = `translate3d(0, ${(1 - o) * 10}px, 0)`
+      })
+      if (cueRef.current) cueRef.current.style.opacity = (1 - ease((p - 0.72) / 0.18)).toFixed(3)
+      // products — scrub through 5, each window 0.2
+      const prodWindows: Array<[number, number, number, number]> = [
+        [0, 0.04, 0.16, 0.22],
+        [0.22, 0.26, 0.36, 0.42],
+        [0.42, 0.46, 0.56, 0.62],
+        [0.62, 0.66, 0.76, 0.82],
+        [0.82, 0.86, 0.96, 1],
+      ]
+      products.forEach((el, i) => {
+        const o = opacityFor(p, prodWindows[i] ?? [0, 0, 0, 0])
+        // subtle parallax by depth
+        const depth = [0.9, 0.5, 0.7, 0.4, 0.85][i] ?? 0.5
+        const dx = (isMobile ? 0 : (p - 0.5) * 18 * depth)
+        el.style.opacity = o.toFixed(3)
+        el.style.transform = `translate3d(${dx.toFixed(1)}px, ${(1 - o) * 6}px, 0) scale(${0.96 + o * 0.04})`
+        el.style.filter = o > 0.1 ? `blur(${(1 - o) * 1.2}px) drop-shadow(0 16px 28px rgba(0,0,0,.38))` : 'blur(2px)'
       })
     }
 
-    // scroll — sticky chapters (like Miphone 440svh → 280svh for Best)
-    const chapters = Array.from(sticky.querySelectorAll<HTMLElement>('.launch-chapter'))
-    const veil = sticky.querySelector<HTMLElement>('.launch-veil')
+    function onScrollFrame() {
+      raf2 = 0
+      const top = section!.getBoundingClientRect().top + window.scrollY
+      const range = Math.max(1, section!.offsetHeight - stage!.offsetHeight)
+      z = smooth((window.scrollY - top) / range)
+      if (raf === 0) raf = requestAnimationFrame(tick)
+    }
+    function schedule() { if (!raf2) raf2 = requestAnimationFrame(onScrollFrame) }
+    function tick(ts: number) {
+      raf = 0
+      const dt = last ? Math.min(64, ts - last) : 16.7
+      last = ts
+      const lerp = 1 - Math.pow(1 - 0.22, dt / 16.7)
+      G += (z - G) * lerp
+      if (Math.abs(z - G) < 0.0004) G = z
+      render(G)
+      if (Math.abs(z - G) >= 0.0004) raf = requestAnimationFrame(tick)
+      else last = 0
+    }
 
-    const st = ScrollTrigger.create({
-      trigger: wrap,
-      start: 'top top',
-      end: 'bottom bottom',
-      scrub: 0.6,
-      onUpdate(self) {
-        const p = self.progress // 0→1 over 280vh
-        // chapters: 0: AUGUSTINOPOLIS 0-0.28, 1: 11.09 0.28-0.52, 2: 09H 0.52-0.76, 3: NOVA UNIDADE 0.76-1
-        const windows: Array<[number, number, number, number]> = [
-          [0, 0.04, 0.22, 0.28],
-          [0.28, 0.34, 0.46, 0.52],
-          [0.52, 0.58, 0.70, 0.76],
-          [0.76, 0.82, 0.95, 1],
-        ]
-        const ease = (x: number) => x * x * (3 - 2 * x)
-        chapters.forEach((el, i) => {
-          const [a, b, c, d] = windows[i]
-          let o = 0
-          if (p >= a && p < b) o = ease((p - a) / (b - a))
-          else if (p >= b && p < c) o = 1
-          else if (p >= c && p < d) o = 1 - ease((p - c) / (d - c))
-          else o = 0
-          el.style.opacity = String(o)
-          el.style.transform = `translate3d(0, ${(1 - o) * 14}px, 0)`
-        })
-        if (veil) veil.style.opacity = String(p > 0.88 ? ease((p - 0.88) / 0.12) : 0)
-        // products react to scroll: disperse slightly
-        const disp = p * 12
-        products.forEach((prod, i) => {
-          const depth = [0.6, 0.3, 0.9, 0.5, 1][i] ?? 0.5
-          gsap.set(prod, { x: `+=${disp * depth * 0.15}`, y: `+=${disp * depth * 0.08}` } as any)
-        })
-      },
-    })
-
-    // initial state
-    chapters.forEach((el, i) => {
-      el.style.opacity = i === 0 ? '1' : '0'
-      el.style.transform = i === 0 ? 'translate3d(0,0,0)' : 'translate3d(0,14px,0)'
-    })
-
-    return () => { st.kill() }
+    render(0)
+    onScrollFrame()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', onScrollFrame, { passive: true })
+    window.addEventListener('orientationchange', onScrollFrame as any, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', onScrollFrame)
+      window.removeEventListener('orientationchange', onScrollFrame as any)
+      if (raf) cancelAnimationFrame(raf)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
   }, [])
 
   return (
     <>
-      
+      <style>{`
+        .launch-wrap{position:relative;height:240vh;background:#080808;}
+        @media(max-width:767px){.launch-wrap{height:220vh;}}
+        .launch-sticky{position:sticky;top:0;height:100svh;min-height:100dvh;overflow:hidden;background:#080808;isolation:isolate;display:grid;grid-template-columns:38% 62%;align-items:center;}
+        @media(max-width:900px){.launch-sticky{grid-template-columns:42% 58%;}}
+        @media(max-width:767px){.launch-sticky{grid-template-columns:1fr;grid-template-rows:auto 1fr;align-items:stretch;}}
+        .launch-bg{position:absolute;inset:0;background:
+          radial-gradient(ellipse 68% 52% at 65% 42%, rgba(255,255,255,.055), transparent 58%),
+          radial-gradient(ellipse 28% 22% at 18% 18%, rgba(215,25,32,.055), transparent 52%),
+          linear-gradient(180deg, #080808 0%, #0f0f0f 100%);
+        }
+        .launch-grid{position:absolute;inset:0;opacity:0.012;background-image:linear-gradient(to right, #fff 1px, transparent 1px), linear-gradient(to bottom, #fff 1px, transparent 1px);background-size:72px 72px;}
+        .launch-copy{position:relative;z-index:10;padding:0 clamp(1.2rem,3.5vw,3rem);display:grid;max-width:100%;}
+        @media(max-width:767px){.launch-copy{padding:5.5rem 1.2rem 1rem;align-self:start;}}
+        .launch-chapter{grid-area:1/1;align-self:center;pointer-events:none;}
+        .launch-kicker{font-family:Inter,sans-serif;font-size:10px;letter-spacing:.20em;text-transform:uppercase;color:rgba(255,255,255,.52);margin-bottom:1rem;display:flex;align-items:center;gap:.6rem;}
+        .launch-kicker::before{content:'';width:18px;height:1px;background:#D71920;}
+        .launch-title{font-family:Barlow Condensed,sans-serif;font-weight:900;line-height:.88;letter-spacing:-.03em;color:#F5F5F2;font-size:clamp(3.2rem,6vw,6.5rem);}
+        @media(max-width:767px){.launch-title{font-size:clamp(2.5rem,11vw,4rem) !important;}}
+        .launch-title em{color:#D71920;font-style:normal;}
+        .launch-title .outline{color:transparent;-webkit-text-stroke:1.1px rgba(245,245,242,.92);}
+        .launch-sub{font-family:Inter,sans-serif;font-size:13px;line-height:1.6;color:rgba(255,255,255,.52);max-width:32ch;margin-top:.9rem;}
+        .launch-media{position:relative;z-index:3;height:100%;display:flex;align-items:center;justify-content:center;overflow:visible;pointer-events:none;}
+        @media(max-width:767px){.launch-media{height:auto;align-self:end;padding-bottom:1.2rem;}}
+        .launch-stage{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
+        .launch-prod{position:absolute;object-fit:contain;will-change:transform,opacity;filter:drop-shadow(0 18px 32px rgba(0,0,0,.42));opacity:0;}
+        .launch-prod--dunk{left:8%;top:18%;width:min(38vw,440px);}
+        .launch-prod--adidas{left:52%;top:8%;width:min(28vw,320px);}
+        .launch-prod--jacket{left:36%;top:52%;width:min(32vw,380px);}
+        .launch-prod--diesel{left:6%;top:58%;width:min(26vw,300px);}
+        .launch-prod--cap{left:64%;top:62%;width:min(18vw,200px);}
+        @media(max-width:767px){
+          .launch-prod--dunk{left:50%;top:38%;width:min(74vw,320px);transform:translate(-50%,-50%);}
+          .launch-prod--adidas{left:50%;top:18%;width:min(52vw,220px);}
+          .launch-prod--jacket{left:50%;top:64%;width:min(62vw,280px);}
+          .launch-prod--diesel{display:none;}
+          .launch-prod--cap{left:70%;top:72%;width:min(30vw,130px);}
+        }
+        .launch-rail{margin-top:1.4rem;width:min(13rem,52%);height:1px;background:rgba(255,255,255,.14);overflow:hidden;}
+        .launch-rail i{display:block;height:100%;width:100%;background:#D71920;transform-origin:left;transform:scaleX(var(--p,0));will-change:transform;}
+        @media(max-width:767px){.launch-rail{width:8rem;}}
+        .launch-veil{position:absolute;inset:0;background:#080808;opacity:0;pointer-events:none;z-index:5;}
+        .launch-cue{position:absolute;left:50%;bottom:1.2rem;transform:translateX(-50%);z-index:10;display:flex;flex-direction:column;align-items:center;gap:.4rem;opacity:.62;}
+        .launch-cue-line{width:1px;height:28px;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.45));}
+        .launch-cue-txt{font-family:Barlow Condensed,sans-serif;font-size:.58rem;letter-spacing:.22em;text-transform:uppercase;color:rgba(255,255,255,.5);}
+      `}</style>
 
-      <div ref={wrapRef} className="launch-wrap">
-        <div ref={stickyRef} className="launch-sticky">
+      <section ref={sectionRef} className="launch-wrap" aria-labelledby="launch-title">
+        <div ref={stageRef} className="launch-sticky">
           <div className="launch-bg" />
           <div className="launch-grid" />
-          <div className="launch-glow" style={{ background: 'radial-gradient(ellipse 70% 60% at 30% 20%, rgba(181,42,39,.18) 0%, transparent 60%)' }} />
-          <div className="launch-glow" style={{ background: 'radial-gradient(ellipse 60% 50% at 85% 85%, rgba(212,191,168,.14) 0%, transparent 55%)' }} />
 
-          {/* ambient products */}
-          <div ref={trackRef} className="launch-stage" aria-hidden>
-            <img className="launch-prod launch-prod--dunk" src="/products/nike-dunk-panda.png" alt="" />
-            <img className="launch-prod launch-prod--adidas" src="/products/adidas-sneaker.png" alt="" />
-            <img className="launch-prod launch-prod--jacket" src="/products/nike-jacket.png" alt="" />
-            <img className="launch-prod launch-prod--diesel" src="/products/diesel-shirt.png" alt="" />
-            <img className="launch-prod launch-prod--cap" src="/products/ny-cap.png" alt="" />
-          </div>
-
-          <div className="launch-copy">
-            {/* chapter 0 — inauguration */}
+          <div ref={copyRef} className="launch-copy">
             <div className="launch-chapter">
               <div className="launch-kicker">Nova unidade</div>
-              <div className="launch-title" style={{ fontSize: 'clamp(3.2rem,6vw,6.5rem)' }}>
+              <h1 id="launch-title" className="launch-title">
                 A BEST CHEGA<br />
-                A AUGUSTINÓPOLIS<em>.</em>
+                A AUGUSTINÓPOLIS<span style={{ color: '#D71920' }}>.</span>
+              </h1>
+              <div className="launch-title outline" style={{ fontSize: 'clamp(1.1rem,1.6vw,1.35rem)', letterSpacing: '.14em', marginTop: '.7rem', WebkitTextStroke: '0', color: 'rgba(255,255,255,.72)', fontWeight: 600 }}>
+                11.09.2026 — 09H
               </div>
-              <div className="launch-sub" style={{ marginTop: '1rem', color: 'rgba(255,255,255,.62)' }}>
-                <span style={{ color: '#F5F5F2', letterSpacing: '.08em', fontWeight: 600 }}>11.09.2026 — 09H</span> • BEST MULTIMARCAS
-              </div>
+              <p className="launch-sub">De Araguatins para Augustinópolis. Mesma curadoria, novas paredes.</p>
+              <div className="launch-rail" aria-hidden><i ref={railRef} /></div>
             </div>
-            {/* chapter 1 — from Araguatins */}
             <div className="launch-chapter">
               <div className="launch-kicker">De Araguatins para Augustinópolis</div>
-              <div className="launch-title" style={{ fontSize: 'clamp(2.8rem,5.2vw,5rem)' }}>
+              <h2 className="launch-title">
                 DUAS CIDADES.<br />
-                <span className="outline">UMA SÓ BEST</span><em>.</em>
-              </div>
-              <div className="launch-sub">A mesma curadoria, agora mais perto de você.</div>
+                <span className="outline">UMA SÓ BEST</span><span style={{ color: '#D71920' }}>.</span>
+              </h2>
+              <p className="launch-sub">A mesma curadoria, agora mais perto de você.</p>
+              <a href="https://www.instagram.com/bestmultimarcasaugustinopolis/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 mt-4 bg-white text-black font-[Barlow_Condensed] tracking-[0.14em] text-xs px-4 py-2.5 hover:bg-white/90 transition" style={{ pointerEvents: 'auto' }}>
+                ACOMPANHAR NO INSTAGRAM ↗
+              </a>
             </div>
           </div>
 
-          <div className="launch-veil" />
+          <div className="launch-media">
+            <div className="launch-stage">
+              <img className="launch-prod launch-prod--dunk" src="/products/nike-dunk-panda.png" alt="" />
+              <img className="launch-prod launch-prod--adidas" src="/products/adidas-sneaker.png" alt="" />
+              <img className="launch-prod launch-prod--jacket" src="/products/nike-jacket.png" alt="" />
+              <img className="launch-prod launch-prod--diesel" src="/products/diesel-shirt.png" alt="" />
+              <img className="launch-prod launch-prod--cap" src="/products/ny-cap.png" alt="" />
+            </div>
+          </div>
 
-          <div className="launch-cue">
+          <div ref={veilRef} className="launch-veil" aria-hidden />
+          <div ref={cueRef} className="launch-cue" aria-hidden>
             <div className="launch-cue-line" />
             <div className="launch-cue-txt">Role</div>
           </div>
         </div>
-      </div>
+      </section>
     </>
   )
 }
