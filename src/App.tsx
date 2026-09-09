@@ -12,6 +12,18 @@ const InstagramIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 // ── DATA ────────────────────────────────────────────────────────────────────
 
+type Decoration = {
+  src: string
+  alt: string
+  x: number
+  y: number
+  w: number
+  rotation: number
+  layer: 'back' | 'mid' | 'front'
+  depth: number
+  idle: { y: number; x: number; rotation: number; duration: number }
+}
+
 type Slide = {
   id: string
   brand: string
@@ -26,6 +38,7 @@ type Slide = {
   textColor: 'dark' | 'light'
   type: 'shoe' | 'jacket' | 'shirt' | 'cap'
   scale: number
+  decorations: Decoration[]
 }
 
 const SLIDES: Slide[] = [
@@ -37,12 +50,17 @@ const SLIDES: Slide[] = [
     bgWord: 'DUNK',
     asset: '/products/nike-dunk-panda.png',
     alt: 'Nike Dunk Panda',
-    bg: '#F1F1EF',
-    glow: 'radial-gradient(ellipse 70% 55% at 50% 40%, rgba(0,0,0,.07) 0%, transparent 62%)',
-    vignette: 'radial-gradient(ellipse 80% 70% at 50% 50%, transparent 42%, rgba(0,0,0,.06) 100%)',
-    textColor: 'dark',
+    bg: '#1A5FA8',
+    glow: 'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(90,170,255,.30) 0%, transparent 70%)',
+    vignette: 'radial-gradient(ellipse 75% 70% at 50% 50%, transparent 32%, rgba(8,22,55,.58) 100%)',
+    textColor: 'light',
     type: 'shoe',
     scale: 1,
+    decorations: [
+      { src: '/decorations/dunk-heel.png', alt: '', x: 16, y: 68, w: 240, rotation: 18, layer: 'front', depth: 0.7, idle: { y: 10, x: 4, rotation: 4, duration: 7.2 } },
+      { src: '/decorations/dunk-toecap.png', alt: '', x: 84, y: 22, w: 170, rotation: -12, layer: 'back', depth: 0.25, idle: { y: 14, x: -3, rotation: 6, duration: 9.1 } },
+      { src: '/decorations/dunk-swoosh.png', alt: '', x: 70, y: 38, w: 360, rotation: -8, layer: 'back', depth: 0.45, idle: { y: 6, x: 8, rotation: 2, duration: 8.4 } },
+    ],
   },
   {
     id: 'adidas',
@@ -52,12 +70,13 @@ const SLIDES: Slide[] = [
     bgWord: 'ADIDAS',
     asset: '/products/adidas-sneaker.png',
     alt: 'Adidas Sneaker',
-    bg: '#EDEAE3',
-    glow: 'radial-gradient(ellipse 60% 60% at 50% 45%, rgba(16,16,16,.06) 0%, transparent 66%)',
-    vignette: 'radial-gradient(ellipse 75% 70% at 50% 50%, transparent 38%, rgba(0,0,0,.04) 100%)',
+    bg: '#D4E842',
+    glow: 'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(255,255,190,.32) 0%, transparent 70%)',
+    vignette: 'radial-gradient(ellipse 75% 70% at 50% 50%, transparent 34%, rgba(55,70,5,.42) 100%)',
     textColor: 'dark',
     type: 'shoe',
     scale: 0.97,
+    decorations: [],
   },
   {
     id: 'jacket',
@@ -67,12 +86,16 @@ const SLIDES: Slide[] = [
     bgWord: 'NIKE',
     asset: '/products/nike-jacket.png',
     alt: 'Jaqueta Nike',
-    bg: 'radial-gradient(ellipse at 50% 45%, #343434 0%, #242424 38%, #1A1A1A 62%, #111111 100%)',
-    glow: 'radial-gradient(ellipse 55% 55% at 50% 45%, rgba(255,255,255,.12), transparent 65%)',
-    vignette: 'radial-gradient(ellipse 75% 70% at 50% 50%, transparent 32%, rgba(0,0,0,.42) 100%)',
+    bg: '#B52A27',
+    glow: 'radial-gradient(ellipse 60% 60% at 50% 45%, rgba(255,130,110,.26) 0%, transparent 70%)',
+    vignette: 'radial-gradient(ellipse 75% 70% at 50% 50%, transparent 30%, rgba(55,12,14,.58) 100%)',
     textColor: 'light',
     type: 'jacket',
     scale: 0.86,
+    decorations: [
+      { src: '/decorations/dunk-heel.png', alt: '', x: 18, y: 52, w: 420, rotation: 14, layer: 'back', depth: 0.35, idle: { y: 8, x: 5, rotation: 3, duration: 8.0 } },
+      { src: '/decorations/dunk-toecap.png', alt: '', x: 80, y: 28, w: 180, rotation: -18, layer: 'front', depth: 0.6, idle: { y: 9, x: -4, rotation: 5, duration: 7.0 } },
+    ],
   },
   {
     id: 'diesel',
@@ -82,12 +105,13 @@ const SLIDES: Slide[] = [
     bgWord: 'DIESEL',
     asset: '/products/diesel-shirt.png',
     alt: 'Camiseta Diesel',
-    bg: '#F5F3EE',
-    glow: 'radial-gradient(ellipse 60% 60% at 50% 40%, rgba(215,25,32,.055) 0%, transparent 62%)',
-    vignette: 'radial-gradient(ellipse 78% 70% at 50% 50%, transparent 45%, rgba(0,0,0,.05) 100%)',
+    bg: '#C69245',
+    glow: 'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(255,230,180,.32) 0%, transparent 70%)',
+    vignette: 'radial-gradient(ellipse 78% 70% at 50% 50%, transparent 38%, rgba(75,48,12,.45) 100%)',
     textColor: 'dark',
     type: 'shirt',
     scale: 0.88,
+    decorations: [],
   },
   {
     id: 'cap',
@@ -97,12 +121,16 @@ const SLIDES: Slide[] = [
     bgWord: 'NY',
     asset: '/products/ny-cap.png',
     alt: 'Boné NY',
-    bg: '#2B1A13',
-    glow: 'radial-gradient(ellipse 62% 56% at 50% 44%, rgba(212,191,168,.14) 0%, transparent 64%)',
-    vignette: 'radial-gradient(ellipse 80% 74% at 50% 50%, transparent 30%, rgba(0,0,0,.55) 100%)',
-    textColor: 'light',
+    bg: '#7FA89A',
+    glow: 'radial-gradient(ellipse 62% 56% at 50% 45%, rgba(190,225,210,.30) 0%, transparent 70%)',
+    vignette: 'radial-gradient(ellipse 80% 74% at 50% 50%, transparent 35%, rgba(40,70,60,.38) 100%)',
+    textColor: 'dark',
     type: 'cap',
     scale: 0.80,
+    decorations: [
+      { src: '/decorations/statue-of-liberty.png', alt: '', x: 18, y: 74, w: 220, rotation: 0, layer: 'back', depth: 0.3, idle: { y: 6, x: 2, rotation: 1, duration: 9.5 } },
+      { src: '/decorations/ny-logo.png', alt: '', x: 76, y: 42, w: 380, rotation: -6, layer: 'back', depth: 0.5, idle: { y: 7, x: -3, rotation: 2, duration: 8.8 } },
+    ],
   },
 ]
 
@@ -248,6 +276,12 @@ function HeroSlider() {
   // dual text layers
   const textARef = useRef<HTMLDivElement>(null)
   const textBRef = useRef<HTMLDivElement>(null)
+  // decor layers A/B — GSAP-owned like products
+  const decorARef = useRef<HTMLDivElement>(null)
+  const decorBRef = useRef<HTMLDivElement>(null)
+  const decorIdleMap = useRef<Map<HTMLElement, gsap.core.Timeline>>(new Map())
+  const glowIdleA = useRef<gsap.core.Tween | null>(null)
+  const glowIdleB = useRef<gsap.core.Tween | null>(null)
 
   const isTransitioning = useRef(false)
   const pending = useRef<number | null>(null)
@@ -266,8 +300,8 @@ function HeroSlider() {
   function fgFor(s: Slide) { return s.textColor === 'dark' ? '#0A0A0A' : '#FFFFFF' }
   function fgMutedFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(10,10,10,.55)' : 'rgba(255,255,255,.60)' }
   function fgSubtleFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(10,10,10,.35)' : 'rgba(255,255,255,.45)' }
-  function wordColorFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(0,0,0,.045)' : 'rgba(255,255,255,.07)' }
-  function wordStrokeFor(s: Slide) { return s.textColor === 'dark' ? '1px rgba(0,0,0,.06)' : '1px rgba(255,255,255,.08)' }
+  function wordColorFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(0,0,0,.075)' : 'rgba(255,255,255,.11)' }
+  function wordStrokeFor(s: Slide) { return s.textColor === 'dark' ? '1px rgba(0,0,0,.09)' : '1px rgba(255,255,255,.13)' }
 
   function renderTextLayer(el: HTMLElement, s: Slide) {
     el.innerHTML = `
@@ -291,6 +325,77 @@ function HeroSlider() {
     })
   }
 
+  // ── DECOR HELPERS ─────────────────────────────────────────────────────────
+
+  function visibleDecorations(slide: Slide): Decoration[] {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+    if (!isMobile) return slide.decorations
+    if (slide.id === 'dunk' && slide.decorations.length > 2) return slide.decorations.slice(0, 2)
+    if (slide.id === 'jacket' && slide.decorations.length > 1) return slide.decorations.slice(0, 1)
+    return slide.decorations.slice(0, 2)
+  }
+
+  function buildDecorLayer(container: HTMLElement, slide: Slide) {
+    container.innerHTML = ''
+    const decs = visibleDecorations(slide)
+    decs.forEach((d) => {
+      const img = document.createElement('img')
+      img.src = d.src
+      img.alt = d.alt
+      img.decoding = 'async' as never
+      img.draggable = false
+      img.style.position = 'absolute'
+      img.style.left = `${d.x}%`
+      img.style.top = `${d.y}%`
+      img.style.width = `${d.w}px`
+      img.style.height = 'auto'
+      img.style.transform = `translate(-50%, -50%) rotate(${d.rotation}deg)`
+      img.style.objectFit = 'contain'
+      img.style.pointerEvents = 'none'
+      img.style.willChange = 'transform, opacity'
+      img.style.opacity = '1'
+      img.style.zIndex = d.layer === 'back' ? '1' : d.layer === 'front' ? '3' : '2'
+      img.dataset.depth = String(d.depth)
+      img.dataset.w = String(d.w)
+      if (window.innerWidth < 768) {
+        const scale = d.w > 300 ? 0.55 : 0.7
+        img.style.width = `${Math.round(d.w * scale)}px`
+      }
+      if (d.layer === 'back') img.style.opacity = '0.92'
+      container.appendChild(img)
+    })
+  }
+
+  function killDecorIdle(container: HTMLElement | null) {
+    if (!container) return
+    Array.from(container.children).forEach((el) => {
+      const tl = decorIdleMap.current.get(el as HTMLElement)
+      if (tl) { tl.kill(); decorIdleMap.current.delete(el as HTMLElement) }
+      gsap.killTweensOf(el)
+    })
+  }
+
+  function startDecorIdle(container: HTMLElement | null) {
+    if (!container || reduced) return
+    Array.from(container.children).forEach((el, i) => {
+      const htmlEl = el as HTMLElement
+      const idxAttr = Array.from(container.children).indexOf(el)
+      const slideDecs = visibleDecorations(SLIDES[currentRef.current])
+      const cfg = slideDecs[idxAttr] ?? slideDecs[i % slideDecs.length]
+      if (!cfg) return
+      const { y, x, rotation, duration } = cfg.idle
+      const tl = gsap.timeline({ repeat: -1, delay: i * 0.35 })
+      tl.to(htmlEl, { y: -y, x: -x, rotation: cfg.rotation + rotation, duration: duration * 0.33, ease: 'sine.inOut' })
+        .to(htmlEl, { y: y * 0.45, x: x * 0.6, rotation: cfg.rotation - rotation * 0.8, duration: duration * 0.34, ease: 'sine.inOut' })
+        .to(htmlEl, { y: 0, x: 0, rotation: cfg.rotation, duration: duration * 0.33, ease: 'sine.inOut' })
+      decorIdleMap.current.set(htmlEl, tl)
+    })
+  }
+
+  function preloadDecorations(slide: Slide) {
+    slide.decorations.forEach(d => { void preloadImage(d.src).catch(() => {}) })
+  }
+
   // init layers + robust preload — GSAP/DOM is the sole owner, React does not reapply src/opacity/zIndex
   useEffect(() => {
     const a = prodARef.current, b = prodBRef.current
@@ -299,7 +404,8 @@ function HeroSlider() {
     const gA = glowARef.current, gB = glowBRef.current
     const wA = bgWordARef.current, wB = bgWordBRef.current
     const tA = textARef.current, tB = textBRef.current
-    if (!a || !b || !aw || !bw || !bgA || !bgB || !gA || !gB || !wA || !wB || !tA || !tB) return
+    const dA = decorARef.current, dB = decorBRef.current
+    if (!a || !b || !aw || !bw || !bgA || !bgB || !gA || !gB || !wA || !wB || !tA || !tB || !dA || !dB) return
     const s0 = SLIDES[0]
     const s1 = SLIDES[1]
     // set DOM src once — React will not reapply them on idx changes
@@ -340,18 +446,29 @@ function HeroSlider() {
     bw.style.filter = 'drop-shadow(0 28px 60px rgba(0,0,0,.28))'
     gsap.set(a, { x: 0, y: 0, rotation: 0, scale: s0.scale, opacity: 1, filter: 'blur(0px)' })
     gsap.set(b, { x: 0, y: 0, rotation: 0, scale: 1, opacity: 0, filter: 'blur(0px)' })
+    // decor layers — GSAP-owned, behind product
+    dA.style.zIndex = '4'; dB.style.zIndex = '3'
+    buildDecorLayer(dA, s0); buildDecorLayer(dB, s1)
+    gsap.set(dA, { opacity: 1 }); gsap.set(dB, { opacity: 0 })
+    // glow breathing (subtle)
+    if (!reduced) {
+      glowIdleA.current = gsap.to(gA, { scale: 1.04, duration: 9, ease: 'sine.inOut', repeat: -1, yoyo: true })
+      glowIdleB.current = gsap.to(gB, { scale: 1.04, duration: 11, ease: 'sine.inOut', repeat: -1, yoyo: true, paused: true })
+    }
 
     // preload strategy: slide 0 already eager, preload 1 immediately, then idle preload 2,3,4
     void preloadImage(s0.asset).catch(() => {})
     void preloadImage(s1.asset).catch(() => {})
+    preloadDecorations(s0); preloadDecorations(s1)
     const idlePreload = () => {
-      for (let i = 2; i < SLIDES.length; i++) void preloadImage(SLIDES[i].asset).catch(() => {})
+      for (let i = 2; i < SLIDES.length; i++) { void preloadImage(SLIDES[i].asset).catch(() => {}); preloadDecorations(SLIDES[i]) }
     }
     const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
     if (ric) ric(idlePreload)
     else setTimeout(idlePreload, 700)
 
     startIdle(a)
+    startDecorIdle(dA)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -407,14 +524,19 @@ function HeroSlider() {
     const wordIn  = activeIsA.current ? bgWordBRef.current : bgWordARef.current
     const textOut = activeIsA.current ? textARef.current : textBRef.current
     const textIn  = activeIsA.current ? textBRef.current : textARef.current
+    const decorOut = activeIsA.current ? decorARef.current : decorBRef.current
+    const decorIn  = activeIsA.current ? decorBRef.current : decorARef.current
+    const glowOutIdle = activeIsA.current ? glowIdleA.current : glowIdleB.current
+    const glowInIdle  = activeIsA.current ? glowIdleB.current : glowIdleA.current
 
-    if (!prodOut || !prodIn || !bgOut || !bgIn || !glowOut || !glowIn || !wordOut || !wordIn || !textOut || !textIn) {
+    if (!prodOut || !prodIn || !bgOut || !bgIn || !glowOut || !glowIn || !wordOut || !wordIn || !textOut || !textIn || !decorOut || !decorIn) {
       currentRef.current = next; setIdx(next); isTransitioning.current = false; return
     }
 
     // ——— guarantee incoming ready before any visual change ———
     try {
       await preloadImage(nextSlide.asset)
+      await Promise.all(nextSlide.decorations.map(d => preloadImage(d.src).catch(() => {})))
     } catch (e) {
       console.warn('[hero] preload failed, aborting transition', nextSlide.asset, e)
       isTransitioning.current = false
@@ -429,16 +551,19 @@ function HeroSlider() {
       wordIn.style.webkitTextStroke = wordStrokeFor(nextSlide) as string
       textIn.style.color = fgFor(nextSlide)
       renderTextLayer(textIn, nextSlide)
+      // decor — build incoming
+      buildDecorLayer(decorIn, nextSlide)
       // z-index swap — wrappers hold product zIndex, not imgs
       const wrapOut = activeIsA.current ? prodAWrapRef.current : prodBWrapRef.current
       const wrapIn  = activeIsA.current ? prodBWrapRef.current : prodAWrapRef.current
       bgIn.style.zIndex = '2'; bgOut.style.zIndex = '1'
       glowIn.style.zIndex = '2'; glowOut.style.zIndex = '1'
       wordIn.style.zIndex = '3'; wordOut.style.zIndex = '2'
+      decorIn.style.zIndex = '4'; decorOut.style.zIndex = '3'
       if (wrapOut && wrapIn) { wrapIn.style.zIndex = '5'; wrapOut.style.zIndex = '4' }
       textIn.style.zIndex = '6'; textOut.style.zIndex = '5'
-      gsap.set([bgIn, glowIn, wordIn, textIn, prodIn], { opacity: 1 })
-      gsap.set([bgOut, glowOut, wordOut, textOut, prodOut], { opacity: 0 })
+      gsap.set([bgIn, glowIn, wordIn, textIn, prodIn, decorIn], { opacity: 1 })
+      gsap.set([bgOut, glowOut, wordOut, textOut, prodOut, decorOut], { opacity: 0 })
       currentRef.current = next; setIdx(next)
       activeIsA.current = !activeIsA.current
       isTransitioning.current = false
@@ -448,6 +573,9 @@ function HeroSlider() {
     }
 
     killIdle()
+    killDecorIdle(decorOut)
+    killDecorIdle(decorIn)
+    if (glowOutIdle) glowOutIdle.pause()
     pauseAutoplay()
 
     const vw = window.innerWidth
@@ -464,6 +592,9 @@ function HeroSlider() {
     wordIn.style.webkitTextStroke = wordStrokeFor(nextSlide) as string
     textIn.style.color = fgFor(nextSlide)
     renderTextLayer(textIn, nextSlide)
+    // decor — build incoming, keep A/B principle
+    buildDecorLayer(decorIn, nextSlide)
+    decorIn.style.zIndex = '4'; decorOut.style.zIndex = '3'
 
     // z-index: incoming on top — wrappers own product stacking
     const wrapOut = activeIsA.current ? prodAWrapRef.current : prodBWrapRef.current
@@ -493,7 +624,7 @@ function HeroSlider() {
       return
     }
 
-    gsap.killTweensOf([prodOut, prodIn, bgOut, bgIn, glowOut, glowIn, wordOut, wordIn, textOut, textIn])
+    gsap.killTweensOf([prodOut, prodIn, bgOut, bgIn, glowOut, glowIn, wordOut, wordIn, textOut, textIn, decorOut, decorIn, ...Array.from(decorOut.children), ...Array.from(decorIn.children)])
 
     gsap.set(prodIn,  { x: direction * TRAVEL, y: direction * 16, rotation: -direction * rotIn, scale: nextSlide.scale * 1.06, opacity: 0, filter: 'blur(12px)' })
     gsap.set(prodOut, { x: 0, y: 0, rotation: 0, scale: prevSlide.scale, opacity: 1, filter: 'blur(0px)' })
@@ -501,6 +632,14 @@ function HeroSlider() {
     gsap.set(glowIn, { opacity: 0 })
     gsap.set(wordIn, { x: direction * 70, opacity: 0, scale: 0.96 })
     gsap.set(textIn, { y: 18, opacity: 0 })
+    gsap.set(decorIn, { opacity: 0 })
+    gsap.set(decorOut, { opacity: 1 })
+    Array.from(decorIn.children).forEach((el, i) => {
+      gsap.set(el, { x: direction * (70 + i * 22), y: direction * 10, rotation: -direction * 14, opacity: 0, scale: 0.88 })
+    })
+    Array.from(decorOut.children).forEach((el) => {
+      gsap.set(el, { x: 0, y: 0, rotation: parseFloat((el as HTMLElement).dataset.depth || '0'), opacity: 1, scale: 1 })
+    })
 
     const tl = gsap.timeline({
       onComplete: () => {
@@ -521,8 +660,21 @@ function HeroSlider() {
         gsap.set(glowIn, { opacity: 1 })
         gsap.set(wordIn, { opacity: 1, x: 0, scale: 1 })
         gsap.set(textIn, { opacity: 1, y: 0 })
+        gsap.set(decorOut, { opacity: 0 })
+        gsap.set(decorIn, { opacity: 1 })
+        Array.from(decorIn.children).forEach(el => gsap.set(el, { x: 0, y: 0, rotation: 0, scale: 1, opacity: 1 }))
         // normalize z-index (incoming becomes current A/B for next cycle)
         startIdle(prodIn)
+        startDecorIdle(decorIn)
+        // glow breathing swap
+        if (!reduced) {
+          if (glowOutIdle) { glowOutIdle.pause(); gsap.set(glowOut, { scale: 1 }) }
+          if (glowInIdle) glowInIdle.play()
+          else {
+            const fallback = activeIsA.current ? glowIdleB.current : glowIdleA.current
+            if (fallback) fallback.play()
+          }
+        }
         debugHero(`after ${prev}→${next}`)
         if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; const d = p > next ? 1 : -1; void goTo(p, d) }
       }
@@ -546,6 +698,16 @@ function HeroSlider() {
     tl.to(textOut, { y: -18, opacity: 0, duration: 0.32, ease: 'power2.in' }, 0.12)
     tl.to(textIn,  { y: 0, opacity: 1, duration: 0.48, ease: 'power3.out' }, DUR * 0.38)
 
+    // decor — enter/exit choreographed with product (1.72s)
+    tl.to(decorOut, { opacity: 0, duration: DUR * 0.52, ease: 'power2.in' }, 0.10)
+    tl.to(decorIn,  { opacity: 1, duration: DUR * 0.58, ease: 'power2.out' }, DUR * 0.24)
+    if (decorOut.children.length) {
+      tl.to(Array.from(decorOut.children), { x: -direction * 85, y: direction * -16, rotation: direction * 16, opacity: 0, scale: 0.88, duration: DUR * 0.62, stagger: 0.06, ease: 'power3.in' }, 0.08)
+    }
+    if (decorIn.children.length) {
+      tl.to(Array.from(decorIn.children), { x: 0, y: 0, rotation: 0, opacity: 1, scale: 1, duration: DUR * 0.72, stagger: 0.07, ease: 'power3.out' }, DUR * 0.28)
+    }
+
   }, [reduced, pauseAutoplay])
 
   useEffect(() => { currentRef.current = idx }, [idx])
@@ -553,6 +715,7 @@ function HeroSlider() {
   useEffect(() => { scheduleAutoplay(); return () => { if (autoplayTimer.current) clearInterval(autoplayTimer.current); if (resumeTimer.current) clearTimeout(resumeTimer.current) } }, [scheduleAutoplay])
 
   // cursor tilt on active product only
+  // cursor tilt + decor parallax (depth)
   useEffect(() => {
     if (reduced || window.matchMedia('(pointer: coarse)').matches) return
     const stage = stageRef.current
@@ -560,6 +723,7 @@ function HeroSlider() {
     let raf = 0
     const onMove = (e: MouseEvent) => {
       const active = activeIsA.current ? prodARef.current : prodBRef.current
+      const decor = activeIsA.current ? decorARef.current : decorBRef.current
       if (!active || isTransitioning.current) return
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
@@ -567,11 +731,19 @@ function HeroSlider() {
         const x = (e.clientX - rect.left) / rect.width - 0.5
         const y = (e.clientY - rect.top) / rect.height - 0.5
         gsap.to(active, { x: x * 14, y: y * 10, rotationY: x * 6, rotationX: -y * 4, duration: 0.7, ease: 'power3.out', overwrite: 'auto' })
+        if (decor) {
+          Array.from(decor.children).forEach((el) => {
+            const d = parseFloat((el as HTMLElement).dataset.depth || '0.4')
+            gsap.to(el, { x: x * 16 * d, y: y * 12 * d, duration: 0.8, ease: 'power3.out', overwrite: 'auto' })
+          })
+        }
       })
     }
     const onLeave = () => {
       const active = activeIsA.current ? prodARef.current : prodBRef.current
+      const decor = activeIsA.current ? decorARef.current : decorBRef.current
       if (active) gsap.to(active, { x: 0, y: 0, rotationY: 0, rotationX: 0, duration: 0.8, ease: 'power3.out' })
+      if (decor) gsap.to(Array.from(decor.children), { x: 0, y: 0, duration: 0.9, ease: 'power3.out' })
     }
     stage.addEventListener('mousemove', onMove)
     stage.addEventListener('mouseleave', onLeave)
@@ -605,6 +777,21 @@ function HeroSlider() {
     el.addEventListener('touchend', onEnd, { passive: true })
     return () => { el.removeEventListener('touchstart', onStart); el.removeEventListener('touchend', onEnd) }
   }, [goTo, pauseAutoplay])
+
+  // resize — rebuild decor for current slide (mobile/desktop switch)
+  useEffect(() => {
+    const onResize = () => {
+      if (isTransitioning.current) return
+      const d = activeIsA.current ? decorARef.current : decorBRef.current
+      if (!d) return
+      killDecorIdle(d)
+      buildDecorLayer(d, SLIDES[currentRef.current])
+      gsap.set(d, { opacity: 1 })
+      startDecorIdle(d)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const nextIdx = (idx + 1) % SLIDES.length
   const prevIdx = (idx - 1 + SLIDES.length) % SLIDES.length
@@ -647,6 +834,10 @@ function HeroSlider() {
         className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 font-[Barlow_Condensed] font-black leading-none tracking-[-0.03em] whitespace-nowrap pointer-events-none will-change-transform"
         style={{ fontSize: 'clamp(5rem, 18vw, 21rem)' }}
       />
+
+      {/* decor layers A/B — GSAP-owned, each holds per-slide decorations */}
+      <div ref={decorARef} className="absolute inset-0 pointer-events-none" />
+      <div ref={decorBRef} className="absolute inset-0 pointer-events-none" />
 
       {/* products stack — wrappers own drop-shadow + zIndex, imgs are GSAP-only (no src/opacity/filter in JSX) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
