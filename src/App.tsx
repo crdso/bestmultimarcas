@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ArrowUpRight, Menu, X, MapPin, ArrowLeft, ArrowRight } from 'lucide-react'
+
+gsap.registerPlugin(ScrollTrigger)
+// keep helpers for typecheck (used in new hero via closure, not direct import)
+void gsap
 
 const InstagramIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -256,637 +261,398 @@ function preloadImage(src: string): Promise<void> {
   return p
 }
 
-// ── HERO ────────────────────────────────────────────────────────────────────
+// ── HERO — rebuilt from Nike Slider mechanics (zero autoplay) ─────────────────────────────────
+// Fidelidade à referência: 500vh→600vh para 5 slides, sticky 100svh, track 500vw, produto clamp(380px,68vw,860px),
+// bg-text clamp(6rem,20vw,19rem), DUR 1.9, EXIT_DUR 0.588*DUR, TRAVEL 0.88*vw, rotation 290, back.in(0.8)/power4.inOut,
+// idle kbTween scale 1.06 dur8 + wobble 5deg, float IDLE_CFG, getPx/entryY/transitionFloats idênticos.
+// Zero autoplay: nenhum setInterval para troca de slide.
 
 function HeroSlider() {
-  const [idx, setIdx] = useState(0)
-  const [reduced, setReduced] = useState(false)
-
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const stickyRef = useRef<HTMLDivElement>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
-  const prodARef = useRef<HTMLImageElement>(null)
-  const prodBRef = useRef<HTMLImageElement>(null)
-  const prodAWrapRef = useRef<HTMLDivElement>(null)
-  const prodBWrapRef = useRef<HTMLDivElement>(null)
-  const bgARef = useRef<HTMLDivElement>(null)
-  const bgBRef = useRef<HTMLDivElement>(null)
-  const glowARef = useRef<HTMLDivElement>(null)
-  const glowBRef = useRef<HTMLDivElement>(null)
-  const bgWordARef = useRef<HTMLDivElement>(null)
-  const bgWordBRef = useRef<HTMLDivElement>(null)
-  // dual text layers
-  const textARef = useRef<HTMLDivElement>(null)
-  const textBRef = useRef<HTMLDivElement>(null)
-  // decor layers A/B — GSAP-owned like products
-  const decorARef = useRef<HTMLDivElement>(null)
-  const decorBRef = useRef<HTMLDivElement>(null)
-  const decorIdleMap = useRef<Map<HTMLElement, gsap.core.Timeline>>(new Map())
-  const glowIdleA = useRef<gsap.core.Tween | null>(null)
-  const glowIdleB = useRef<gsap.core.Tween | null>(null)
+  const floatRef = useRef<HTMLDivElement>(null)
+  const counterRef = useRef<HTMLSpanElement>(null)
+  const dotsRef = useRef<HTMLDivElement>(null)
+  const infoRef = useRef<HTMLDivElement>(null)
+  const brandRef = useRef<HTMLDivElement>(null)
+  const nameRef = useRef<HTMLDivElement>(null)
 
-  const isTransitioning = useRef(false)
-  const pending = useRef<number | null>(null)
-  const currentRef = useRef(0)
-  const activeIsA = useRef(true)
-  const idleTl = useRef<gsap.core.Timeline | null>(null)
-  const autoplayTimer = useRef<number | null>(null)
-  const resumeTimer = useRef<number | null>(null)
+  const TOTAL = SLIDES.length
 
-  const slide = SLIDES[idx]
+  // BEST floats — mesmas posições da referência para DUNK, adaptadas para jaqueta/boné
+  const BEST_FLOATS: Array<Array<{src:string,x:number,y:number,r:number,w:number}>> = [
+    [
+      { src: '/decorations/dunk-swoosh.png', x: 13, y: 16, r: 10, w: 290 },
+      { src: '/decorations/dunk-toecap.png', x: 83, y: 16, r: -15, w: 300 },
+      { src: '/decorations/dunk-heel.png', x: 83, y: 70, r: -8, w: 200 },
+    ],
+    [],
+    [
+      { src: '/decorations/dunk-heel.png', x: 13, y: 16, r: 10, w: 290 },
+      { src: '/decorations/dunk-toecap.png', x: 83, y: 16, r: -15, w: 300 },
+    ],
+    [],
+    [
+      { src: '/decorations/statue-of-liberty.png', x: 13, y: 16, r: 6, w: 220 },
+      { src: '/decorations/ny-logo.png', x: 83, y: 16, r: -8, w: 300 },
+      { src: '/decorations/statue-of-liberty.png', x: 83, y: 70, r: -8, w: 180 },
+    ],
+  ]
 
   useEffect(() => {
-    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  }, [])
-
-  function fgFor(s: Slide) { return s.textColor === 'dark' ? '#0A0A0A' : '#FFFFFF' }
-  function fgMutedFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(10,10,10,.55)' : 'rgba(255,255,255,.60)' }
-  function fgSubtleFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(10,10,10,.35)' : 'rgba(255,255,255,.45)' }
-  function wordColorFor(s: Slide) { return s.textColor === 'dark' ? 'rgba(0,0,0,.075)' : 'rgba(255,255,255,.11)' }
-  function wordStrokeFor(s: Slide) { return s.textColor === 'dark' ? '1px rgba(0,0,0,.09)' : '1px rgba(255,255,255,.13)' }
-
-  function renderTextLayer(el: HTMLElement, s: Slide) {
-    el.innerHTML = `
-      <div style="font-family:Inter,sans-serif;font-size:11px;letter-spacing:0.22em;opacity:0.95">${s.brand}</div>
-      <h1 style="font-family:Barlow Condensed,sans-serif;font-weight:900;line-height:0.86;letter-spacing:-0.03em;font-size:clamp(2.8rem,7vw,5.6rem);margin-top:6px">${s.name}${s.name2 ? `<br/><span style="-webkit-text-stroke:${s.textColor === 'dark' ? '1.4px #0A0A0A' : '1.2px rgba(255,255,255,.92)'};color:transparent">${s.name2}</span>` : ''}</h1>
-      <div style="font-family:Inter,sans-serif;font-size:11px;letter-spacing:0.18em;margin-top:14px;opacity:0.85">ARAGUATINS — AUGUSTINÓPOLIS</div>
-    `
-  }
-
-  function debugHero(label: string) {
-    if (!import.meta.env.DEV) return
-    console.table({
-      label,
-      current: currentRef.current,
-      idx,
-      active: activeIsA.current ? 'A' : 'B',
-      srcA: prodARef.current?.src.slice(-30),
-      srcB: prodBRef.current?.src.slice(-30),
-      opacityA: prodARef.current ? getComputedStyle(prodARef.current).opacity : '-',
-      opacityB: prodBRef.current ? getComputedStyle(prodBRef.current).opacity : '-',
-    })
-  }
-
-  // ── DECOR HELPERS ─────────────────────────────────────────────────────────
-
-  function visibleDecorations(slide: Slide): Decoration[] {
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
-    if (!isMobile) return slide.decorations
-    if (slide.id === 'dunk' && slide.decorations.length > 2) return slide.decorations.slice(0, 2)
-    if (slide.id === 'jacket' && slide.decorations.length > 1) return slide.decorations.slice(0, 1)
-    return slide.decorations.slice(0, 2)
-  }
-
-  function buildDecorLayer(container: HTMLElement, slide: Slide) {
-    container.innerHTML = ''
-    const decs = visibleDecorations(slide)
-    decs.forEach((d) => {
-      const img = document.createElement('img')
-      img.src = d.src
-      img.alt = d.alt
-      img.decoding = 'async' as never
-      img.draggable = false
-      img.style.position = 'absolute'
-      img.style.left = `${d.x}%`
-      img.style.top = `${d.y}%`
-      img.style.width = `${d.w}px`
-      img.style.height = 'auto'
-      img.style.transform = `translate(-50%, -50%) rotate(${d.rotation}deg)`
-      img.style.objectFit = 'contain'
-      img.style.pointerEvents = 'none'
-      img.style.willChange = 'transform, opacity'
-      img.style.opacity = '1'
-      img.style.zIndex = d.layer === 'back' ? '1' : d.layer === 'front' ? '3' : '2'
-      img.dataset.depth = String(d.depth)
-      img.dataset.w = String(d.w)
-      if (window.innerWidth < 768) {
-        const scale = d.w > 300 ? 0.55 : 0.7
-        img.style.width = `${Math.round(d.w * scale)}px`
-      }
-      if (d.layer === 'back') img.style.opacity = '0.92'
-      container.appendChild(img)
-    })
-  }
-
-  function killDecorIdle(container: HTMLElement | null) {
-    if (!container) return
-    Array.from(container.children).forEach((el) => {
-      const tl = decorIdleMap.current.get(el as HTMLElement)
-      if (tl) { tl.kill(); decorIdleMap.current.delete(el as HTMLElement) }
-      gsap.killTweensOf(el)
-    })
-  }
-
-  function startDecorIdle(container: HTMLElement | null) {
-    if (!container || reduced) return
-    Array.from(container.children).forEach((el, i) => {
-      const htmlEl = el as HTMLElement
-      const idxAttr = Array.from(container.children).indexOf(el)
-      const slideDecs = visibleDecorations(SLIDES[currentRef.current])
-      const cfg = slideDecs[idxAttr] ?? slideDecs[i % slideDecs.length]
-      if (!cfg) return
-      const { y, x, rotation, duration } = cfg.idle
-      const tl = gsap.timeline({ repeat: -1, delay: i * 0.35 })
-      tl.to(htmlEl, { y: -y, x: -x, rotation: cfg.rotation + rotation, duration: duration * 0.33, ease: 'sine.inOut' })
-        .to(htmlEl, { y: y * 0.45, x: x * 0.6, rotation: cfg.rotation - rotation * 0.8, duration: duration * 0.34, ease: 'sine.inOut' })
-        .to(htmlEl, { y: 0, x: 0, rotation: cfg.rotation, duration: duration * 0.33, ease: 'sine.inOut' })
-      decorIdleMap.current.set(htmlEl, tl)
-    })
-  }
-
-  function preloadDecorations(slide: Slide) {
-    slide.decorations.forEach(d => { void preloadImage(d.src).catch(() => {}) })
-  }
-
-  // init layers + robust preload — GSAP/DOM is the sole owner, React does not reapply src/opacity/zIndex
-  useEffect(() => {
-    const a = prodARef.current, b = prodBRef.current
-    const aw = prodAWrapRef.current, bw = prodBWrapRef.current
-    const bgA = bgARef.current, bgB = bgBRef.current
-    const gA = glowARef.current, gB = glowBRef.current
-    const wA = bgWordARef.current, wB = bgWordBRef.current
-    const tA = textARef.current, tB = textBRef.current
-    const dA = decorARef.current, dB = decorBRef.current
-    if (!a || !b || !aw || !bw || !bgA || !bgB || !gA || !gB || !wA || !wB || !tA || !tB || !dA || !dB) return
-    const s0 = SLIDES[0]
-    const s1 = SLIDES[1]
-    // set DOM src once — React will not reapply them on idx changes
-    a.src = s0.asset; a.alt = s0.alt
-    b.src = s1.asset; b.alt = s1.alt
-    // A = current
-    bgA.style.background = s0.bg
-    gA.style.background = s0.glow
-    wA.textContent = s0.bgWord
-    wA.style.color = wordColorFor(s0)
-    wA.style.webkitTextStroke = wordStrokeFor(s0) as string
-    tA.style.color = fgFor(s0)
-    renderTextLayer(tA, s0)
-    gsap.set(tA, { opacity: 1, y: 0 })
-    // B = hidden, will hold next
-    bgB.style.background = s1.bg
-    gB.style.background = s1.glow
-    wB.textContent = s1.bgWord
-    wB.style.color = wordColorFor(s1)
-    wB.style.webkitTextStroke = wordStrokeFor(s1) as string
-    tB.style.color = fgFor(s1)
-    renderTextLayer(tB, s1)
-    // explicit z-index — only set via DOM, never via React props after mount
-    bgA.style.zIndex = '1'; bgB.style.zIndex = '0'
-    gA.style.zIndex = '1'; gB.style.zIndex = '0'
-    wA.style.zIndex = '2'; wB.style.zIndex = '1'
-    aw.style.zIndex = '3'; bw.style.zIndex = '2'
-    tA.style.zIndex = '4'; tB.style.zIndex = '3'
-    gsap.set(bgB, { opacity: 0 })
-    gsap.set(gB, { opacity: 0 })
-    gsap.set(wB, { opacity: 0 })
-    gsap.set(tB, { opacity: 0 })
-    gsap.set(b, { opacity: 0 })
-    gsap.set(aw, { opacity: 1 })
-    gsap.set(bw, { opacity: 1 })
-    // drop-shadow lives on wrapper, blur/transform on img
-    aw.style.filter = 'drop-shadow(0 28px 60px rgba(0,0,0,.28))'
-    bw.style.filter = 'drop-shadow(0 28px 60px rgba(0,0,0,.28))'
-    gsap.set(a, { x: 0, y: 0, rotation: 0, scale: s0.scale, opacity: 1, filter: 'blur(0px)' })
-    gsap.set(b, { x: 0, y: 0, rotation: 0, scale: 1, opacity: 0, filter: 'blur(0px)' })
-    // decor layers — GSAP-owned, behind product
-    dA.style.zIndex = '4'; dB.style.zIndex = '3'
-    buildDecorLayer(dA, s0); buildDecorLayer(dB, s1)
-    gsap.set(dA, { opacity: 1 }); gsap.set(dB, { opacity: 0 })
-    // glow breathing (subtle)
-    if (!reduced) {
-      glowIdleA.current = gsap.to(gA, { scale: 1.04, duration: 9, ease: 'sine.inOut', repeat: -1, yoyo: true })
-      glowIdleB.current = gsap.to(gB, { scale: 1.04, duration: 11, ease: 'sine.inOut', repeat: -1, yoyo: true, paused: true })
-    }
-
-    // preload strategy: slide 0 already eager, preload 1 immediately, then idle preload 2,3,4
-    void preloadImage(s0.asset).catch(() => {})
-    void preloadImage(s1.asset).catch(() => {})
-    preloadDecorations(s0); preloadDecorations(s1)
-    const idlePreload = () => {
-      for (let i = 2; i < SLIDES.length; i++) { void preloadImage(SLIDES[i].asset).catch(() => {}); preloadDecorations(SLIDES[i]) }
-    }
-    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
-    if (ric) ric(idlePreload)
-    else setTimeout(idlePreload, 700)
-
-    startIdle(a)
-    startDecorIdle(dA)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  function killIdle() {
-    if (idleTl.current) { idleTl.current.kill(); idleTl.current = null }
-  }
-
-  function startIdle(el: HTMLElement) {
-    killIdle()
-    if (reduced) return
-    const s = SLIDES[currentRef.current]
-    const ampY = s.type === 'shoe' ? 7 : s.type === 'jacket' ? 5 : s.type === 'shirt' ? 6 : 4
-    const ampR = s.type === 'shoe' ? 1.8 : s.type === 'jacket' ? 0.9 : 1.1
-    const tl = gsap.timeline({ repeat: -1 })
-    tl.to(el, { y: -ampY, rotation: ampR, scale: s.scale * 1.018, duration: 2.8, ease: 'sine.inOut' })
-      .to(el, { y: ampY * 0.35, rotation: -ampR * 0.9, scale: s.scale * 0.995, duration: 2.9, ease: 'sine.inOut' })
-      .to(el, { y: 0, rotation: 0, scale: s.scale, duration: 2.6, ease: 'sine.inOut' })
-    idleTl.current = tl
-  }
-
-  const scheduleAutoplay = useCallback(() => {
-    if (reduced) return
-    if (autoplayTimer.current) clearInterval(autoplayTimer.current)
-    autoplayTimer.current = window.setInterval(() => {
-      void goTo((currentRef.current + 1) % SLIDES.length, 1)
-    }, 6500)
-  }, [reduced])
-
-  const pauseAutoplay = useCallback(() => {
-    if (autoplayTimer.current) { clearInterval(autoplayTimer.current); autoplayTimer.current = null }
-    if (resumeTimer.current) clearTimeout(resumeTimer.current)
-    resumeTimer.current = window.setTimeout(() => scheduleAutoplay(), 9000)
-  }, [scheduleAutoplay])
-
-  const goTo = useCallback(async (next: number, dir?: number) => {
-    if (next === currentRef.current) return
-    if (isTransitioning.current) { pending.current = next; return }
-    isTransitioning.current = true
-    const prev = currentRef.current
-    const direction = dir ?? (next > prev ? 1 : -1)
-    const prevSlide = SLIDES[prev]
-    const nextSlide = SLIDES[next]
-    const rotOut = rotationFor(prevSlide)
-    const rotIn = rotationFor(nextSlide)
-
-    const prodOut = activeIsA.current ? prodARef.current : prodBRef.current
-    const prodIn  = activeIsA.current ? prodBRef.current : prodARef.current
-    const bgOut   = activeIsA.current ? bgARef.current : bgBRef.current
-    const bgIn    = activeIsA.current ? bgBRef.current : bgARef.current
-    const glowOut = activeIsA.current ? glowARef.current : glowBRef.current
-    const glowIn  = activeIsA.current ? glowBRef.current : glowARef.current
-    const wordOut = activeIsA.current ? bgWordARef.current : bgWordBRef.current
-    const wordIn  = activeIsA.current ? bgWordBRef.current : bgWordARef.current
-    const textOut = activeIsA.current ? textARef.current : textBRef.current
-    const textIn  = activeIsA.current ? textBRef.current : textARef.current
-    const decorOut = activeIsA.current ? decorARef.current : decorBRef.current
-    const decorIn  = activeIsA.current ? decorBRef.current : decorARef.current
-    const glowOutIdle = activeIsA.current ? glowIdleA.current : glowIdleB.current
-    const glowInIdle  = activeIsA.current ? glowIdleB.current : glowIdleA.current
-
-    if (!prodOut || !prodIn || !bgOut || !bgIn || !glowOut || !glowIn || !wordOut || !wordIn || !textOut || !textIn || !decorOut || !decorIn) {
-      currentRef.current = next; setIdx(next); isTransitioning.current = false; return
-    }
-
-    // ——— guarantee incoming ready before any visual change ———
-    try {
-      await preloadImage(nextSlide.asset)
-      await Promise.all(nextSlide.decorations.map(d => preloadImage(d.src).catch(() => {})))
-    } catch (e) {
-      console.warn('[hero] preload failed, aborting transition', nextSlide.asset, e)
-      isTransitioning.current = false
-      return
-    }
-
-    if (reduced) {
-      bgIn.style.background = nextSlide.bg
-      glowIn.style.background = nextSlide.glow
-      wordIn.textContent = nextSlide.bgWord
-      wordIn.style.color = wordColorFor(nextSlide)
-      wordIn.style.webkitTextStroke = wordStrokeFor(nextSlide) as string
-      textIn.style.color = fgFor(nextSlide)
-      renderTextLayer(textIn, nextSlide)
-      // decor — build incoming
-      buildDecorLayer(decorIn, nextSlide)
-      // z-index swap — wrappers hold product zIndex, not imgs
-      const wrapOut = activeIsA.current ? prodAWrapRef.current : prodBWrapRef.current
-      const wrapIn  = activeIsA.current ? prodBWrapRef.current : prodAWrapRef.current
-      bgIn.style.zIndex = '2'; bgOut.style.zIndex = '1'
-      glowIn.style.zIndex = '2'; glowOut.style.zIndex = '1'
-      wordIn.style.zIndex = '3'; wordOut.style.zIndex = '2'
-      decorIn.style.zIndex = '4'; decorOut.style.zIndex = '3'
-      if (wrapOut && wrapIn) { wrapIn.style.zIndex = '5'; wrapOut.style.zIndex = '4' }
-      textIn.style.zIndex = '6'; textOut.style.zIndex = '5'
-      gsap.set([bgIn, glowIn, wordIn, textIn, prodIn, decorIn], { opacity: 1 })
-      gsap.set([bgOut, glowOut, wordOut, textOut, prodOut, decorOut], { opacity: 0 })
-      currentRef.current = next; setIdx(next)
-      activeIsA.current = !activeIsA.current
-      isTransitioning.current = false
-      if (import.meta.env.DEV) console.table({ label: 'reduced goTo end', current: currentRef.current, idx: next, active: activeIsA.current ? 'A' : 'B', srcA: prodARef.current?.src.slice(-30), srcB: prodBRef.current?.src.slice(-30) })
-      if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; void goTo(p) }
-      return
-    }
-
-    killIdle()
-    killDecorIdle(decorOut)
-    killDecorIdle(decorIn)
-    if (glowOutIdle) glowOutIdle.pause()
-    pauseAutoplay()
-
-    const vw = window.innerWidth
-    const TRAVEL = vw * 0.62
-    const DUR = 1.72
-
-    // prepare incoming layers fully before animating
-    prodIn.src = nextSlide.asset
-    prodIn.alt = nextSlide.alt
-    bgIn.style.background = nextSlide.bg
-    glowIn.style.background = nextSlide.glow
-    wordIn.textContent = nextSlide.bgWord
-    wordIn.style.color = wordColorFor(nextSlide)
-    wordIn.style.webkitTextStroke = wordStrokeFor(nextSlide) as string
-    textIn.style.color = fgFor(nextSlide)
-    renderTextLayer(textIn, nextSlide)
-    // decor — build incoming, keep A/B principle
-    buildDecorLayer(decorIn, nextSlide)
-    decorIn.style.zIndex = '4'; decorOut.style.zIndex = '3'
-
-    // z-index: incoming on top — wrappers own product stacking
-    const wrapOut = activeIsA.current ? prodAWrapRef.current : prodBWrapRef.current
-    const wrapIn  = activeIsA.current ? prodBWrapRef.current : prodAWrapRef.current
-    bgIn.style.zIndex = '2'; bgOut.style.zIndex = '1'
-    glowIn.style.zIndex = '2'; glowOut.style.zIndex = '1'
-    wordIn.style.zIndex = '3'; wordOut.style.zIndex = '2'
-    if (wrapOut && wrapIn) { wrapIn.style.zIndex = '5'; wrapOut.style.zIndex = '4' }
-    textIn.style.zIndex = '6'; textOut.style.zIndex = '5'
-
-    // ensure decode + complete before crossfade
-    try {
-      if (!prodIn.complete || prodIn.naturalWidth === 0) {
-        await new Promise<void>((res, rej) => {
-          const onLoad = () => { prodIn.removeEventListener('load', onLoad); prodIn.removeEventListener('error', onErr); res() }
-          const onErr = () => { prodIn.removeEventListener('load', onLoad); prodIn.removeEventListener('error', onErr); rej(new Error('img load error')) }
-          prodIn.addEventListener('load', onLoad, { once: true })
-          prodIn.addEventListener('error', onErr, { once: true })
-        })
-      }
-      const d = (prodIn as unknown as { decode?: () => Promise<void> }).decode
-      if (d) await d.call(prodIn).catch(() => {})
-      if (prodIn.naturalWidth === 0) throw new Error('naturalWidth 0')
-    } catch (e) {
-      console.warn('[hero] incoming decode failed, aborting', e)
-      isTransitioning.current = false
-      return
-    }
-
-    gsap.killTweensOf([prodOut, prodIn, bgOut, bgIn, glowOut, glowIn, wordOut, wordIn, textOut, textIn, decorOut, decorIn, ...Array.from(decorOut.children), ...Array.from(decorIn.children)])
-
-    gsap.set(prodIn,  { x: direction * TRAVEL, y: direction * 16, rotation: -direction * rotIn, scale: nextSlide.scale * 1.06, opacity: 0, filter: 'blur(12px)' })
-    gsap.set(prodOut, { x: 0, y: 0, rotation: 0, scale: prevSlide.scale, opacity: 1, filter: 'blur(0px)' })
-    gsap.set(bgIn,   { opacity: 0 })
-    gsap.set(glowIn, { opacity: 0 })
-    gsap.set(wordIn, { x: direction * 70, opacity: 0, scale: 0.96 })
-    gsap.set(textIn, { y: 18, opacity: 0 })
-    gsap.set(decorIn, { opacity: 0 })
-    gsap.set(decorOut, { opacity: 1 })
-    Array.from(decorIn.children).forEach((el, i) => {
-      gsap.set(el, { x: direction * (70 + i * 22), y: direction * 10, rotation: -direction * 14, opacity: 0, scale: 0.88 })
-    })
-    Array.from(decorOut.children).forEach((el) => {
-      gsap.set(el, { x: 0, y: 0, rotation: parseFloat((el as HTMLElement).dataset.depth || '0'), opacity: 1, scale: 1 })
-    })
-
-    const tl = gsap.timeline({
-      onComplete: () => {
-        currentRef.current = next
-        setIdx(next)
-        activeIsA.current = !activeIsA.current
-        isTransitioning.current = false
-        // explicit normalize
-        gsap.set(prodOut, { x: 0, y: 0, rotation: 0, scale: prevSlide.scale, opacity: 0, filter: 'blur(0px)', clearProps: 'transform' })
-        gsap.set(prodIn,  { x: 0, y: 0, rotation: 0, rotationY: 0, rotationX: 0, scale: nextSlide.scale, opacity: 1, filter: 'blur(0px)', clearProps: 'transform' })
-        // re-apply scale after clear
-        gsap.set(prodIn, { scale: nextSlide.scale })
-        gsap.set(bgOut, { opacity: 0 })
-        gsap.set(glowOut, { opacity: 0 })
-        gsap.set(wordOut, { opacity: 0, x: 0, scale: 1 })
-        gsap.set(textOut, { opacity: 0, y: 0 })
-        gsap.set(bgIn, { opacity: 1 })
-        gsap.set(glowIn, { opacity: 1 })
-        gsap.set(wordIn, { opacity: 1, x: 0, scale: 1 })
-        gsap.set(textIn, { opacity: 1, y: 0 })
-        gsap.set(decorOut, { opacity: 0 })
-        gsap.set(decorIn, { opacity: 1 })
-        Array.from(decorIn.children).forEach(el => gsap.set(el, { x: 0, y: 0, rotation: 0, scale: 1, opacity: 1 }))
-        // normalize z-index (incoming becomes current A/B for next cycle)
-        startIdle(prodIn)
-        startDecorIdle(decorIn)
-        // glow breathing swap
-        if (!reduced) {
-          if (glowOutIdle) { glowOutIdle.pause(); gsap.set(glowOut, { scale: 1 }) }
-          if (glowInIdle) glowInIdle.play()
-          else {
-            const fallback = activeIsA.current ? glowIdleB.current : glowIdleA.current
-            if (fallback) fallback.play()
-          }
-        }
-        debugHero(`after ${prev}→${next}`)
-        if (pending.current !== null && pending.current !== next) { const p = pending.current; pending.current = null; const d = p > next ? 1 : -1; void goTo(p, d) }
-      }
-    })
-
-    // OUT: product flies with heavy rotation
-    tl.to(prodOut, { x: -direction * TRAVEL, y: direction * -18, rotation: direction * rotOut, scale: prevSlide.scale * 0.88, opacity: 0, filter: 'blur(9px)', duration: DUR, ease: 'power4.inOut' }, 0)
-    tl.to(prodIn,  { x: 0, y: 0, rotation: 0, scale: nextSlide.scale, opacity: 1, filter: 'blur(0px)', duration: DUR, ease: 'power4.inOut' }, 0)
-
-    // BG crossfade — only after incoming is guaranteed ready (above)
-    tl.to(bgIn,   { opacity: 1, duration: DUR, ease: 'power2.inOut' }, 0)
-    tl.to(glowIn, { opacity: 1, duration: DUR * 0.85, ease: 'power2.out' }, 0.08)
-    tl.to(bgOut,  { opacity: 0, duration: DUR * 0.6, ease: 'power2.in' }, 0)
-    tl.to(glowOut,{ opacity: 0, duration: DUR * 0.5, ease: 'power2.in' }, 0)
-
-    // bgWord
-    tl.to(wordOut, { x: -direction * 90, opacity: 0, scale: 0.92, duration: DUR * 0.55, ease: 'power3.in' }, 0.04)
-    tl.to(wordIn,  { x: 0, opacity: 1, scale: 1, duration: DUR * 0.72, ease: 'power3.out' }, DUR * 0.28)
-
-    // dual text crossfade (no reliance on isDark global)
-    tl.to(textOut, { y: -18, opacity: 0, duration: 0.32, ease: 'power2.in' }, 0.12)
-    tl.to(textIn,  { y: 0, opacity: 1, duration: 0.48, ease: 'power3.out' }, DUR * 0.38)
-
-    // decor — enter/exit choreographed with product (1.72s)
-    tl.to(decorOut, { opacity: 0, duration: DUR * 0.52, ease: 'power2.in' }, 0.10)
-    tl.to(decorIn,  { opacity: 1, duration: DUR * 0.58, ease: 'power2.out' }, DUR * 0.24)
-    if (decorOut.children.length) {
-      tl.to(Array.from(decorOut.children), { x: -direction * 85, y: direction * -16, rotation: direction * 16, opacity: 0, scale: 0.88, duration: DUR * 0.62, stagger: 0.06, ease: 'power3.in' }, 0.08)
-    }
-    if (decorIn.children.length) {
-      tl.to(Array.from(decorIn.children), { x: 0, y: 0, rotation: 0, opacity: 1, scale: 1, duration: DUR * 0.72, stagger: 0.07, ease: 'power3.out' }, DUR * 0.28)
-    }
-
-  }, [reduced, pauseAutoplay])
-
-  useEffect(() => { currentRef.current = idx }, [idx])
-
-  useEffect(() => { scheduleAutoplay(); return () => { if (autoplayTimer.current) clearInterval(autoplayTimer.current); if (resumeTimer.current) clearTimeout(resumeTimer.current) } }, [scheduleAutoplay])
-
-  // cursor tilt on active product only
-  // cursor tilt + decor parallax (depth)
-  useEffect(() => {
-    if (reduced || window.matchMedia('(pointer: coarse)').matches) return
+    const wrap = wrapRef.current
+    const sticky = stickyRef.current
+    const track = trackRef.current
     const stage = stageRef.current
-    if (!stage) return
-    let raf = 0
-    const onMove = (e: MouseEvent) => {
-      const active = activeIsA.current ? prodARef.current : prodBRef.current
-      const decor = activeIsA.current ? decorARef.current : decorBRef.current
-      if (!active || isTransitioning.current) return
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
-        const rect = stage.getBoundingClientRect()
-        const x = (e.clientX - rect.left) / rect.width - 0.5
-        const y = (e.clientY - rect.top) / rect.height - 0.5
-        gsap.to(active, { x: x * 14, y: y * 10, rotationY: x * 6, rotationX: -y * 4, duration: 0.7, ease: 'power3.out', overwrite: 'auto' })
-        if (decor) {
-          Array.from(decor.children).forEach((el) => {
-            const d = parseFloat((el as HTMLElement).dataset.depth || '0.4')
-            gsap.to(el, { x: x * 16 * d, y: y * 12 * d, duration: 0.8, ease: 'power3.out', overwrite: 'auto' })
-          })
-        }
+    if (!wrap || !sticky || !track || !stage) return
+
+    const slides = Array.from(track!.querySelectorAll<HTMLElement>('.slide'))
+    const stageProds = Array.from(stage.querySelectorAll<HTMLImageElement>('.stage-prod'))
+    const floatItems = Array.from(floatRef.current?.querySelectorAll<HTMLImageElement>('.float-item') ?? [])
+    const dots = Array.from(dotsRef.current?.querySelectorAll<HTMLElement>('.dot') ?? [])
+    const counterEl = counterRef.current
+    const infoEl = infoRef.current
+    const brandEl = brandRef.current
+    const nameEl = nameRef.current
+
+    let current = 0
+    let isTransitioning = false
+    let pendingIdx = -1
+    let pendingDir = 0
+    let currentTl: gsap.core.Timeline | null = null
+    let kbTween: gsap.core.Tween | null = null
+    let wobbleTl: gsap.core.Timeline | null = null
+
+    const SLIDE_TEXT = SLIDES.map(s => ({ name: s.name + (s.name2 ? ' ' + s.name2 : ''), brand: s.brand }))
+    const SLIDE_DARK = SLIDES.map(s => s.textColor === 'light') // true = dark bg needs light UI
+
+    function updateSlideUI(idx: number) {
+      document.body.dataset.heroDark = String(SLIDE_DARK[idx])
+      // keep header readable: data attr can be used in CSS if needed
+    }
+
+    function getPx(cfg: {x:number,y:number,w:number}) {
+      const mob = window.innerWidth < 768
+      const w = mob ? cfg.w * 0.55 : cfg.w
+      return { left: cfg.x / 100 * window.innerWidth - w / 2, top: cfg.y / 100 * window.innerHeight, width: w }
+    }
+
+    const IDLE_CFG = [
+      { dur: 3.2, tx: -10, ty1: -14, ty2: 9, r0: 12, r1: 20, r2: 5 },
+      { dur: 2.8, tx: 10, ty1: -14, ty2: 9, r0: -8, r1: -16, r2: -2 },
+      { dur: 3.6, tx: -6, ty1: -14, ty2: 9, r0: 20, r1: 28, r2: 14 },
+    ]
+
+    function startIdleFloat(item: HTMLElement, i: number) {
+      const c = IDLE_CFG[i % IDLE_CFG.length]
+      const tl = gsap.timeline({ repeat: -1, delay: i * 0.4 })
+      tl.to(item, { x: c.tx, y: c.ty1, rotation: c.r1, duration: c.dur * 0.33, ease: 'sine.inOut' })
+        .to(item, { x: c.tx * -0.5, y: c.ty2, rotation: c.r2, duration: c.dur * 0.33, ease: 'sine.inOut' })
+        .to(item, { x: 0, y: 0, rotation: c.r0, duration: c.dur * 0.34, ease: 'sine.inOut' })
+    }
+
+    function killFloats() { floatItems.forEach(el => gsap.killTweensOf(el)) }
+
+    function entryY(cfg: {y:number,w:number}) {
+      const vh = window.innerHeight, pos = cfg.y / 100 * vh, peek = 20
+      return cfg.y < 50 ? 2 * (peek - pos - cfg.w) : 2 * (vh - peek - pos)
+    }
+
+    function placeFloats(idx: number) {
+      BEST_FLOATS[idx]?.forEach((cfg, i) => {
+        if (!floatItems[i]) return
+        const px = getPx(cfg)
+        floatItems[i].src = cfg.src
+        gsap.set(floatItems[i], { left: px.left, top: px.top, width: px.width, x: 0, y: 0, rotation: cfg.r, opacity: 0, scale: 0.25 })
+      })
+      // hide unused
+      for (let i = (BEST_FLOATS[idx]?.length ?? 0); i < floatItems.length; i++) {
+        gsap.set(floatItems[i], { opacity: 0, scale: 0.25 })
+      }
+    }
+
+    function entryFloats(idx: number) {
+      killFloats()
+      BEST_FLOATS[idx]?.forEach((cfg, i) => {
+        if (!floatItems[i]) return
+        const px = getPx(cfg)
+        floatItems[i].src = cfg.src
+        gsap.set(floatItems[i], { left: px.left, top: px.top, width: px.width, x: 0, y: entryY(cfg), rotation: cfg.r, opacity: 0, scale: 1 })
+        gsap.to(floatItems[i], { y: 0, opacity: 1, duration: 0.65, delay: i * 0.09, ease: 'power3.out', onComplete() { startIdleFloat(floatItems[i], i) } })
       })
     }
-    const onLeave = () => {
-      const active = activeIsA.current ? prodARef.current : prodBRef.current
-      const decor = activeIsA.current ? decorARef.current : decorBRef.current
-      if (active) gsap.to(active, { x: 0, y: 0, rotationY: 0, rotationX: 0, duration: 0.8, ease: 'power3.out' })
-      if (decor) gsap.to(Array.from(decor.children), { x: 0, y: 0, duration: 0.9, ease: 'power3.out' })
-    }
-    stage.addEventListener('mousemove', onMove)
-    stage.addEventListener('mouseleave', onLeave)
-    return () => { stage.removeEventListener('mousemove', onMove); stage.removeEventListener('mouseleave', onLeave); cancelAnimationFrame(raf) }
-  }, [reduced, idx])
 
-  // keyboard
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight') { e.preventDefault(); pauseAutoplay(); void goTo((currentRef.current + 1) % SLIDES.length, 1) }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); pauseAutoplay(); void goTo((currentRef.current - 1 + SLIDES.length) % SLIDES.length, -1) }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [goTo, pauseAutoplay])
-
-  // swipe
-  useEffect(() => {
-    const el = stageRef.current
-    if (!el) return
-    let sx = 0
-    const onStart = (e: TouchEvent) => { sx = e.touches[0].clientX }
-    const onEnd = (e: TouchEvent) => {
-      const dx = e.changedTouches[0].clientX - sx
-      if (Math.abs(dx) > 44) {
-        pauseAutoplay()
-        void goTo(dx < 0 ? (currentRef.current + 1) % SLIDES.length : (currentRef.current - 1 + SLIDES.length) % SLIDES.length, dx < 0 ? 1 : -1)
+    function transitionFloats(prev: number, idx: number, dur: number, dir: number, exitDelay: number, entryDelay: number) {
+      killFloats()
+      const overlay = floatRef.current!
+      const outDur = dur * 0.42, swingRot = dir * 14
+      BEST_FLOATS[prev]?.forEach((cfg, i) => {
+        if (!floatItems[i]) return
+        const px = getPx(cfg)
+        const ghost = document.createElement('img')
+        ghost.className = 'float-item'
+        ghost.src = floatItems[i].src
+        overlay.appendChild(ghost)
+        gsap.set(ghost, { left: px.left, top: px.top, width: px.width, x: 0, y: 0, rotation: cfg.r, opacity: 1 })
+        gsap.to(ghost, { y: entryY(cfg), duration: outDur * 1.25, delay: exitDelay + i * 0.02, ease: 'back.in(2)', onComplete: () => ghost.remove() })
+        gsap.to(ghost, { rotation: cfg.r + swingRot, opacity: 0, duration: outDur * 0.65, delay: exitDelay + i * 0.02 + outDur * 0.65, ease: 'power2.in' })
+      })
+      BEST_FLOATS[idx]?.forEach((cfg, i) => {
+        if (!floatItems[i]) return
+        const px = getPx(cfg)
+        floatItems[i].src = cfg.src
+        gsap.set(floatItems[i], { left: px.left, top: px.top, width: px.width, x: 0, y: entryY(cfg), opacity: 0, scale: 1, rotation: cfg.r - swingRot })
+        gsap.to(floatItems[i], { y: 0, opacity: 1, rotation: cfg.r, duration: dur, delay: entryDelay, ease: 'power4.inOut', onComplete() { startIdleFloat(floatItems[i], i) } })
+      })
+      // hide extras
+      for (let i = (BEST_FLOATS[idx]?.length ?? 0); i < floatItems.length; i++) {
+        gsap.set(floatItems[i], { opacity: 0 })
       }
     }
-    el.addEventListener('touchstart', onStart, { passive: true })
-    el.addEventListener('touchend', onEnd, { passive: true })
-    return () => { el.removeEventListener('touchstart', onStart); el.removeEventListener('touchend', onEnd) }
-  }, [goTo, pauseAutoplay])
 
-  // resize — rebuild decor for current slide (mobile/desktop switch)
-  useEffect(() => {
-    const onResize = () => {
-      if (isTransitioning.current) return
-      const d = activeIsA.current ? decorARef.current : decorBRef.current
-      if (!d) return
-      killDecorIdle(d)
-      buildDecorLayer(d, SLIDES[currentRef.current])
-      gsap.set(d, { opacity: 1 })
-      startDecorIdle(d)
+    let demoLocked = false
+
+    function startProductIdle(idx: number) {
+      if (kbTween) kbTween.kill()
+      if (wobbleTl) wobbleTl.kill()
+      const prod = stageProds[idx]
+      gsap.set(prod, { xPercent: -50, yPercent: -50, x: 0, rotation: 0, scale: 1, opacity: 1, rotateY: 0, y: 0 })
+      kbTween = gsap.to(prod, { scale: 1.06, duration: 8, ease: 'none' })
+      wobbleTl = gsap.timeline({ repeat: -1, delay: 0.8 })
+      wobbleTl.to(prod, { rotation: 5, duration: 2.2, ease: 'sine.inOut' })
+        .to(prod, { rotation: -5, duration: 2.2, ease: 'sine.inOut' })
+        .to(prod, { rotation: 0, duration: 1.6, ease: 'sine.inOut' })
     }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+
+    function goTo(idx: number, forcedDir?: number) {
+      if (idx === current) return
+      if (isTransitioning) { pendingIdx = idx; pendingDir = forcedDir ?? 0; return }
+      pendingIdx = -1; pendingDir = 0; isTransitioning = true
+      const prev = current; current = idx
+      dots.forEach((d, i) => d.classList.toggle('active', i === idx))
+      if (counterEl) counterEl.textContent = String(idx + 1).padStart(2, '0') + ' / 0' + TOTAL
+      updateSlideUI(idx)
+      if (kbTween) kbTween.kill(); if (wobbleTl) wobbleTl.kill(); if (currentTl) currentTl.kill()
+      const outProd = stageProds[prev], inProd = stageProds[idx]
+      gsap.killTweensOf(outProd); gsap.killTweensOf(inProd)
+      const dir = forcedDir !== undefined ? forcedDir : (idx > prev ? 1 : -1)
+      const isLooping = forcedDir !== undefined && ((forcedDir === 1 && idx < prev) || (forcedDir === -1 && idx > prev))
+      const outText = slides[prev].querySelector<HTMLElement>('.bg-text')!
+      const inText = slides[idx].querySelector<HTMLElement>('.bg-text')!
+      gsap.killTweensOf(outText); gsap.killTweensOf(inText)
+      gsap.set(outText, { x: 0, rotationY: 0, y: 0, skewX: 0, scale: 1 })
+      gsap.set(inText, { x: 0, rotationY: 0, y: 0, skewX: 0, scale: 1 })
+      const DUR = 1.9, EXIT_DUR = DUR * 0.588, W = 0, vw = window.innerWidth, TRAVEL = vw * 0.88
+      const TEXT_DUR = 0.32
+      function buildTimeline(tl: gsap.core.Timeline, useText: HTMLElement) {
+        tl.to(outProd, { x: -dir * TRAVEL, rotation: dir * 290, y: dir * -25, duration: EXIT_DUR, ease: 'back.in(0.8)' }, 0)
+        tl.to(outText, { x: -dir * TRAVEL, rotationY: dir * 60, y: dir * -25, duration: EXIT_DUR, ease: 'back.in(0.8)' }, 0)
+        tl.to(track, { x: -idx * vw, duration: DUR * 1.1, ease: 'power4.inOut' }, W)
+        tl.to(inProd, { x: 0, rotation: 0, y: 0, duration: DUR, ease: 'power4.inOut' }, W)
+        tl.to(useText, { x: 0, rotationY: 0, y: 0, duration: DUR, ease: 'power4.inOut' }, W)
+        if (infoEl && brandRef.current && nameRef.current) {
+          tl.to(infoEl, { opacity: 0, y: -16, duration: TEXT_DUR, ease: 'power2.in' }, W + DUR * 0.18)
+          tl.call(() => {
+            const s = SLIDES[idx]
+            if (brandRef.current) brandRef.current.textContent = s.brand
+            if (nameRef.current) nameRef.current.innerHTML = s.name + (s.name2 ? '<br/>' + s.name2 : '')
+            gsap.set(infoEl, { y: 20 })
+          }, [], W + DUR * 0.5)
+          tl.to(infoEl, { opacity: 1, y: 0, duration: TEXT_DUR * 1.4, ease: 'power2.out' }, W + DUR * 0.5 + 0.02)
+        }
+      }
+      if (isLooping) {
+        const cloneSlide = slides[idx].cloneNode(true) as HTMLElement
+        const cloneText = cloneSlide.querySelector<HTMLElement>('.bg-text')!
+        let targetX: number
+        if (dir === 1) { track!.appendChild(cloneSlide); track!.style.width = (TOTAL + 1) * 100 + 'vw'; targetX = -TOTAL * vw }
+        else { track!.insertBefore(cloneSlide, track!.firstChild); track!.style.width = (TOTAL + 1) * 100 + 'vw'; gsap.set(track!,  { x: -(prev + 1) * vw }); targetX = -prev * vw }
+        gsap.set(inProd, { xPercent: -50, yPercent: -50, x: dir * TRAVEL, rotation: -dir * 290, scale: 1, opacity: 1, y: dir * 25 })
+        gsap.set(outProd, { xPercent: -50, yPercent: -50, x: 0, opacity: 1, scale: 1, y: 0 })
+        gsap.set(cloneText, { xPercent: -50, yPercent: -50, x: dir * TRAVEL, rotationY: -dir * 60, y: dir * 25 })
+        currentTl = gsap.timeline({ onComplete() {
+          cloneSlide.remove(); track!.style.width = ''; gsap.set(track!,  { x: -idx * vw })
+          isTransitioning = false; gsap.set(outProd, { opacity: 0 }); gsap.set(outText, { x: 0, rotationY: 0, y: 0 })
+          startProductIdle(idx)
+          if (pendingIdx !== -1 && pendingIdx !== idx) { const p = pendingIdx, pd = pendingDir; pendingIdx = -1; pendingDir = 0; goTo(p, pd) }
+        }})
+        buildTimeline(currentTl, cloneText)
+        currentTl.to(track, { x: targetX, duration: DUR * 1.1, ease: 'power4.inOut' }, W)
+      } else {
+        gsap.set(inProd, { xPercent: -50, yPercent: -50, x: dir * TRAVEL, rotation: -dir * 290, scale: 1, opacity: 1, y: dir * 25 })
+        gsap.set(outProd, { xPercent: -50, yPercent: -50, x: 0, opacity: 1, scale: 1, y: 0 })
+        gsap.set(inText, { x: dir * TRAVEL, rotationY: -dir * 60, y: dir * 25 })
+        currentTl = gsap.timeline({ onComplete() {
+          isTransitioning = false; gsap.set(outProd, { opacity: 0 })
+          gsap.set(slides[prev].querySelector<HTMLElement>('.bg-text')!, { x: 0, rotationY: 0, y: 0 })
+          startProductIdle(idx)
+          if (pendingIdx !== -1 && pendingIdx !== idx) { const p = pendingIdx, pd = pendingDir; pendingIdx = -1; pendingDir = 0; goTo(p, pd) }
+        }})
+        buildTimeline(currentTl, inText)
+      }
+      transitionFloats(prev, idx, DUR, dir, 0, W)
+    }
+
+    function demoNav(dir: number) {
+      if (demoLocked) return
+      const next = (current + dir + TOTAL) % TOTAL
+      goTo(next, dir)
+      const totalScroll = wrap!.offsetHeight - window.innerHeight
+      const targetScroll = wrap!.offsetTop + (next / TOTAL) * totalScroll + 10
+      window.scrollTo({ top: targetScroll, behavior: 'instant' as ScrollBehavior })
+      demoLocked = true; setTimeout(() => { demoLocked = false }, 2200)
+    }
+
+    // keyboard & swipe share same motor
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') { e.preventDefault(); demoNav(1) }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); demoNav(-1) }
+    }
+    document.addEventListener('keydown', onKey)
+    let tx = 0
+    const onTouchStart = (e: TouchEvent) => { tx = e.touches[0].clientX }
+    const onTouchEnd = (e: TouchEvent) => { const dx = e.changedTouches[0].clientX - tx; if (Math.abs(dx) > 40) demoNav(dx < 0 ? 1 : -1) }
+    sticky.addEventListener('touchstart', onTouchStart, { passive: true } as never)
+    sticky.addEventListener('touchend', onTouchEnd, { passive: true } as never)
+
+    // init
+    gsap.set(stageProds, { xPercent: -50, yPercent: -50, x: 0, rotation: 0, scale: 1, opacity: 0 })
+    gsap.set(stageProds[0], { opacity: 1 })
+    gsap.set('.bg-text', { xPercent: -50, yPercent: -50 })
+    updateSlideUI(0); placeFloats(0)
+    gsap.delayedCall(0.5, () => { entryFloats(0); startProductIdle(0) })
+
+    // ScrollTrigger — single source of truth
+    const st = ScrollTrigger.create({
+      trigger: wrap, start: 'top top', end: 'bottom bottom',
+      onUpdate(self) {
+        const idx = Math.min(TOTAL - 1, Math.floor(self.progress * TOTAL + 0.01))
+        if (idx !== current) goTo(idx, idx > current ? 1 : -1)
+      },
+      onEnter() { document.getElementById('hero-nav')?.classList.remove('snav-hidden') },
+      onEnterBack() { document.getElementById('hero-nav')?.classList.remove('snav-hidden') },
+      onLeave() { document.getElementById('hero-nav')?.classList.add('snav-hidden') },
+      onLeaveBack() { document.getElementById('hero-nav')?.classList.add('snav-hidden') },
+    })
+
+    // expose demoNav for buttons
+    ;(window as any).demoNav = demoNav
+    ;(window as any).heroGoTo = goTo
+
+    const onResize = () => {
+      gsap.set(track!,  { x: -current * window.innerWidth })
+      BEST_FLOATS[current]?.forEach((cfg, i) => {
+        if (!floatItems[i]) return
+        const px = getPx(cfg)
+        gsap.set(floatItems[i], { left: px.left, top: px.top, width: px.width })
+      })
+    }
+    window.addEventListener('resize', onResize, { passive: true } as never)
+
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      sticky.removeEventListener('touchstart', onTouchStart as never)
+      sticky.removeEventListener('touchend', onTouchEnd as never)
+      window.removeEventListener('resize', onResize as never)
+      st.kill()
+      if (kbTween) kbTween.kill()
+      if (wobbleTl) wobbleTl.kill()
+      if (currentTl) currentTl.kill()
+      killFloats()
+    }
   }, [])
 
-  const nextIdx = (idx + 1) % SLIDES.length
-  const prevIdx = (idx - 1 + SLIDES.length) % SLIDES.length
-
-  // helper for non-text UI to get current fg synchronously (initial render)
-  const curFg = fgFor(slide)
-  const curFgMuted = fgMutedFor(slide)
-
   return (
-    <section
-      ref={stageRef}
-      aria-roledescription="carousel"
-      aria-label="Vitrine Best"
-      className="relative w-full overflow-hidden select-none"
-      style={{ height: '100svh', minHeight: '100dvh' }}
-      onMouseEnter={() => { if (autoplayTimer.current) { clearInterval(autoplayTimer.current); autoplayTimer.current = null } }}
-      onMouseLeave={() => scheduleAutoplay()}
-    >
-      {/* bg layers — no reactive opacity/zIndex in JSX, GSAP owns them */}
-      <div ref={bgARef} className="absolute inset-0" />
-      <div ref={bgBRef} className="absolute inset-0" />
-      <div ref={glowARef} className="absolute inset-0 pointer-events-none" />
-      <div ref={glowBRef} className="absolute inset-0 pointer-events-none" />
-      <div className="absolute inset-0 pointer-events-none opacity-[0.035]" style={{ backgroundImage: 'linear-gradient(to right, #000 1px, transparent 1px), linear-gradient(to bottom, #000 1px, transparent 1px)', backgroundSize: '72px 72px', zIndex: 2 }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 80% 70% at 50% 50%, transparent 42%, rgba(0,0,0,.06) 100%)', opacity: slide.textColor === 'dark' ? 0.6 : 0, zIndex: 2 }} />
+    <>
+      <style>{`
+        #hero-wrap{position:relative;height:600vh;}
+        #hero-sticky{position:sticky;top:0;height:100svh;min-height:100dvh;overflow:hidden;}
+        #hero-track{display:flex;width:500vw;height:100vh;will-change:transform;}
+        .hero-slide{width:100vw;height:100vh;flex-shrink:0;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+        .hero-glow{position:absolute;inset:0;z-index:1;pointer-events:none;}
+        .hero-vignette{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse 65% 65% at 50% 50%,transparent 30%,rgba(0,0,0,.55) 100%);}
+        .bg-text{position:absolute;left:50%;top:50%;z-index:1;will-change:transform;font-family:var(--font-display);font-size:clamp(6rem,20vw,19rem);font-weight:800;letter-spacing:-.02em;text-transform:uppercase;color:#fff;white-space:nowrap;user-select:none;pointer-events:none;}
+        #product-stage{position:absolute;inset:0;z-index:6;pointer-events:none;overflow:hidden;}
+        .stage-prod{position:absolute;left:50%;top:44%;width:clamp(380px,68vw,860px);height:clamp(380px,68vw,860px);object-fit:contain;opacity:0;will-change:transform,opacity;}
+        #float-overlay{position:absolute;inset:0;z-index:7;pointer-events:none;}
+        .float-item{position:absolute;object-fit:contain;pointer-events:none;will-change:transform,opacity;}
+        .hero-info{position:absolute;left:clamp(1.5rem,6vw,6rem);bottom:clamp(5rem,12vh,8rem);z-index:10;pointer-events:none;}
+        .hero-brand{font-family:var(--font-display);font-size:.82rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.7);}
+        .hero-name{font-family:var(--font-display);font-size:clamp(2.4rem,6vw,5.2rem);font-weight:900;line-height:.9;letter-spacing:-.02em;color:#fff;text-shadow:0 2px 32px rgba(0,0,0,.35);}
+        .hero-counter{position:absolute;bottom:2.2rem;right:1.5rem;z-index:10;display:flex;flex-direction:column;align-items:flex-end;gap:.6rem;}
+        .hero-counter-num{font-family:var(--font-display);font-size:.75rem;letter-spacing:.22em;color:rgba(255,255,255,.7);}
+        .hero-dots{display:flex;gap:.5rem;}
+        .dot{height:3px;width:22px;background:rgba(255,255,255,.35);border-radius:3px;transition:all .5s ease;}
+        .dot.active{background:#fff;width:42px;}
+        #hero-nav{position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%);z-index:9999;display:flex;gap:.6rem;transition:opacity .3s;}
+        #hero-nav.snav-hidden{opacity:0;pointer-events:none;}
+        .snav-btn{width:46px;height:46px;border-radius:50%;border:1.5px solid rgba(255,255,255,.55);background:rgba(0,0,0,.35);backdrop-filter:blur(12px);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+        .snav-btn:hover{background:#fff;color:#111;border-color:#fff;}
+        .scroll-hint{position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);z-index:10;display:flex;flex-direction:column;align-items:center;gap:.5rem;opacity:0;animation:fadeHint 1s 1.5s forwards;}
+        @keyframes fadeHint{to{opacity:1;}}
+        .scroll-hint-line{width:1px;height:36px;background:linear-gradient(to bottom,transparent,rgba(255,255,255,.5));}
+        .scroll-hint-txt{font-family:var(--font-display);font-size:.6rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,255,255,.55);}
+        @media(max-width:767px){
+          .stage-prod{width:clamp(260px,84vw,420px);height:clamp(260px,84vw,420px);top:42%;}
+          .bg-text{font-size:clamp(4.5rem,22vw,11rem);}
+          .hero-info{left:1.2rem;bottom:5.5rem;}
+          .hero-counter{right:1rem;bottom:5rem;}
+        }
+      `}</style>
 
-      {/* hairline — uses current fg */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-[76px] z-20 pointer-events-none" style={{ background: `linear-gradient(to bottom, ${curFgMuted}, transparent)` }} />
+      <div id="hero-wrap" ref={wrapRef}>
+        <div id="hero-sticky" ref={stickyRef}>
+          <div className="hero-counter">
+            <span ref={counterRef} className="hero-counter-num">01 / 05</span>
+            <div ref={dotsRef} className="hero-dots">
+              {SLIDES.map((_, i) => <div key={i} className={i===0 ? 'dot active' : 'dot'} />)}
+            </div>
+          </div>
 
-      {/* bg word layers — GSAP owns opacity/zIndex/color */}
-      <div
-        ref={bgWordARef}
-        aria-hidden
-        className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 font-[Barlow_Condensed] font-black leading-none tracking-[-0.03em] whitespace-nowrap pointer-events-none will-change-transform"
-        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)' }}
-      />
-      <div
-        ref={bgWordBRef}
-        aria-hidden
-        className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 font-[Barlow_Condensed] font-black leading-none tracking-[-0.03em] whitespace-nowrap pointer-events-none will-change-transform"
-        style={{ fontSize: 'clamp(5rem, 18vw, 21rem)' }}
-      />
+          <div ref={trackRef} id="hero-track">
+            {SLIDES.map(s => (
+              <div key={s.id} className="hero-slide" style={{ background: s.bg }}>
+                <div className="hero-glow" style={{ background: s.glow }} />
+                <div className="hero-vignette" style={{ background: s.vignette || undefined }} />
+                <span className="bg-text">{s.bgWord}</span>
+              </div>
+            ))}
+          </div>
 
-      {/* decor layers A/B — GSAP-owned, each holds per-slide decorations */}
-      <div ref={decorARef} className="absolute inset-0 pointer-events-none" />
-      <div ref={decorBRef} className="absolute inset-0 pointer-events-none" />
+          <div id="product-stage" ref={stageRef}>
+            {SLIDES.map(s => (
+              <img key={s.id} className="stage-prod" src={s.asset} alt={s.alt} loading={s.id==='dunk' ? 'eager' : 'lazy'} />
+            ))}
+          </div>
 
-      {/* products stack — wrappers own drop-shadow + zIndex, imgs are GSAP-only (no src/opacity/filter in JSX) */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
-        <div ref={prodAWrapRef} className="absolute flex items-center justify-center pointer-events-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw' }}>
-          <img ref={prodARef} width={860} height={860} decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: '100%', height: '100%' }} />
-        </div>
-        <div ref={prodBWrapRef} className="absolute flex items-center justify-center pointer-events-none" style={{ width: 'min(68vw, 720px)', height: 'min(68vw, 720px)', maxWidth: '88vw' }}>
-          <img ref={prodBRef} width={860} height={860} decoding="async" draggable={false} className="absolute object-contain will-change-transform select-none" style={{ width: '100%', height: '100%' }} />
+          <div id="float-overlay" ref={floatRef}>
+            <img className="float-item" alt="" />
+            <img className="float-item" alt="" />
+            <img className="float-item" alt="" />
+          </div>
+
+          <div ref={infoRef} className="hero-info">
+            <div ref={brandRef} className="hero-brand">{SLIDES[0].brand}</div>
+            <div ref={nameRef} className="hero-name">{SLIDES[0].name}{SLIDES[0].name2 ? ' ' + SLIDES[0].name2 : ''}</div>
+            <div className="hero-brand" style={{marginTop:'.6rem', fontSize:'.62rem', opacity:.55}}>ARAGUATINS — AUGUSTINÓPOLIS</div>
+          </div>
+
+          <div className="scroll-hint">
+            <div className="scroll-hint-line" />
+            <div className="scroll-hint-txt">Scroll</div>
+          </div>
         </div>
       </div>
 
-      {/* dual text layers — GSAP owns opacity/y/zIndex/color */}
-      <div className="absolute z-20 left-6 md:left-10 lg:left-[6vw] bottom-[104px] md:bottom-[92px] max-w-[420px] pointer-events-none">
-        <div ref={textARef} className="absolute bottom-0 left-0 will-change-transform" />
-        <div ref={textBRef} className="absolute bottom-0 left-0 will-change-transform" />
-        {/* spacer to keep container height */}
-        <div aria-hidden className="invisible">
-          <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, letterSpacing: '0.22em' }}>{slide.brand}</div>
-          <h1 style={{ fontFamily: 'Barlow Condensed,sans-serif', fontWeight: 900, lineHeight: 0.86, fontSize: 'clamp(2.8rem,7vw,5.6rem)' }}>{slide.name}{slide.name2 ? <><br />{slide.name2}</> : null}</h1>
-          <div style={{ fontFamily: 'Inter,sans-serif', fontSize: 11, marginTop: 14 }}>ARAGUATINS — AUGUSTINÓPOLIS</div>
-        </div>
+      <div id="hero-nav">
+        <button className="snav-btn" aria-label="Anterior" onClick={() => (window as any).demoNav?.(-1)}><ArrowLeft size={16} /></button>
+        <button className="snav-btn" aria-label="Próximo" onClick={() => (window as any).demoNav?.(1)}><ArrowRight size={16} /></button>
       </div>
-
-      {/* right controls — minimal */}
-      <div className="absolute z-20 right-6 md:right-10 bottom-[20px] md:bottom-[32px] flex flex-col items-end gap-3">
-        <span className="font-[Barlow_Condensed] text-[11px] tracking-[0.28em]" style={{ color: curFgMuted }}>{String(idx + 1).padStart(2, '0')} / 05</span>
-        <div className="flex items-center gap-2">
-          <button aria-label="Anterior" onClick={() => { pauseAutoplay(); void goTo(prevIdx, -1) }} className="w-10 h-10 rounded-full border flex items-center justify-center transition bg-transparent backdrop-blur-md" style={{ borderColor: curFgMuted, color: curFg }}>
-            <ArrowLeft size={16} strokeWidth={1.6} />
-          </button>
-          <button aria-label="Próximo" onClick={() => { pauseAutoplay(); void goTo(nextIdx, 1) }} className="w-10 h-10 rounded-full border flex items-center justify-center transition" style={{ background: curFg, color: slide.textColor === 'dark' ? '#fff' : '#000', borderColor: curFg }}>
-            <ArrowRight size={16} strokeWidth={1.6} />
-          </button>
-        </div>
-        <a href="https://www.instagram.com/bestmultimarcasaraguatins/" target="_blank" rel="noreferrer" className="hidden md:inline-flex items-center gap-1.5 font-[Inter] text-[11px] tracking-[0.16em] underline-offset-4 hover:underline" style={{ color: fgSubtleFor(slide) }}>VER NO INSTAGRAM <ArrowUpRight size={12} /></a>
-      </div>
-
-      {/* dots — discrete, color driven by current fg but tweened in timeline via inline update after transition */}
-      <div className="absolute z-20 left-1/2 -translate-x-1/2 bottom-[26px] md:bottom-[36px] flex gap-1.5">
-        {SLIDES.map((_, i) => (
-          <button key={i} aria-label={`Ir para ${i + 1}`} onClick={() => { pauseAutoplay(); void goTo(i, i > idx ? 1 : -1) }} className="h-[2px] rounded-full transition-all duration-500" style={{ width: i === idx ? 28 : 14, background: i === idx ? curFg : curFgMuted, opacity: i === idx ? 1 : 0.55 }} />
-        ))}
-      </div>
-
-      <style>{`@media(max-width:767px){img[alt]{width:min(88vw, 520px)!important;height:min(88vw,520px)!important}}`}</style>
-    </section>
+    </>
   )
 }
-
 // ── NOVA UNIDADE ────────────────────────────────────────────────────────────
 
 function NovaUnidade() {
