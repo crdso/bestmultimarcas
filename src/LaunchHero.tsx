@@ -115,41 +115,25 @@ export default function LaunchHero() {
           </div>
 
           <div className="launch-copy">
-            {/* chapter 0 */}
+            {/* chapter 0 — inauguration */}
             <div className="launch-chapter">
-              <div className="launch-kicker">Nova unidade • Best Multimarcas</div>
-              <div className="launch-title" style={{ fontSize: 'clamp(2.8rem,7.2vw,5.8rem)' }}>
-                AUGUSTINÓPOLIS,<br />
-                <span className="outline">A BEST</span> TÁ<br />
-                CHEGANDO<em>.</em>
+              <div className="launch-kicker">Nova unidade</div>
+              <div className="launch-title" style={{ fontSize: 'clamp(3.2rem,6vw,6.5rem)' }}>
+                A BEST CHEGA<br />
+                A AUGUSTINÓPOLIS<em>.</em>
               </div>
-              <div className="launch-sub">De Araguatins para Augustinópolis. Mesma curadoria, novas paredes.</div>
+              <div className="launch-sub" style={{ marginTop: '1rem', color: 'rgba(255,255,255,.62)' }}>
+                <span style={{ color: '#F5F5F2', letterSpacing: '.08em', fontWeight: 600 }}>11.09.2026 — 09H</span> • BEST MULTIMARCAS
+              </div>
             </div>
-            {/* chapter 1 */}
+            {/* chapter 1 — from Araguatins */}
             <div className="launch-chapter">
-              <div className="launch-kicker">Inauguração</div>
-              <div className="launch-title" style={{ fontSize: 'clamp(4.2rem,14vw,10rem)', lineHeight: 0.85 }}>
-                11.<br />
-                09
+              <div className="launch-kicker">De Araguatins para Augustinópolis</div>
+              <div className="launch-title" style={{ fontSize: 'clamp(2.8rem,5.2vw,5rem)' }}>
+                DUAS CIDADES.<br />
+                <span className="outline">UMA SÓ BEST</span><em>.</em>
               </div>
-              <div className="launch-sub">Marque na agenda. A cidade ganha uma nova Best.</div>
-            </div>
-            {/* chapter 2 */}
-            <div className="launch-chapter">
-              <div className="launch-kicker">Horário</div>
-              <div className="launch-title" style={{ fontSize: 'clamp(4.2rem,14vw,10rem)', lineHeight: 0.85 }}>
-                09<em>H</em>
-              </div>
-              <div className="launch-sub">Portas abertas às nove da manhã.</div>
-            </div>
-            {/* chapter 3 */}
-            <div className="launch-chapter">
-              <div className="launch-kicker">Chegamos</div>
-              <div className="launch-title" style={{ fontSize: 'clamp(2.8rem,7vw,5.2rem)' }}>
-                NOVA<br />
-                UNIDADE<em>.</em>
-              </div>
-              <div className="launch-sub">BEST MULTIMARCAS — Araguatins • Augustinópolis</div>
+              <div className="launch-sub">A mesma curadoria, agora mais perto de você.</div>
             </div>
           </div>
 
